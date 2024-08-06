@@ -1,0 +1,187 @@
+# -*- coding: utf-8 -*-
+
+from typing import Optional, Union
+
+import numpy as np
+
+
+def create_empty_data_chunk(
+    delta: int, dtype: np.dtype, fill_value: Optional[Union[int, float]] = None
+) -> np.ndarray:
+    """
+    Creates an NumPy array depending on the given data type and fill value.
+
+    If no ``fill_value`` is given a masked array will be returned.
+
+    This function is adapted from the ObsPy library:
+    https://docs.obspy.org/index.html
+
+    Args:
+        delta (int): Length of the array.
+        dtype (np.dtype): Data type of the array.
+        fill_value (Optional[Union[int, float]], optional): Value to fill the array with.
+            Defaults to None.
+
+    Returns:
+        np.ndarray: NumPy array.
+
+    Examples:
+    >>> create_empty_data_chunk(3, 'int', 10)
+    array([10, 10, 10])
+
+    >>> create_empty_data_chunk(
+    ...     3, 'f')  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    masked_array(data = [-- -- --],
+                 mask = ...,
+                 ...)
+    """
+    if fill_value is None:
+        temp = np.ma.masked_all(delta, dtype=np.dtype(dtype))
+        # fill with nan if float number and otherwise with a very small number
+        if issubclass(temp.data.dtype.type, np.integer):
+            temp.data[:] = np.iinfo(temp.data.dtype).min
+        else:
+            temp.data[:] = np.nan
+    elif (isinstance(fill_value, list) or isinstance(fill_value, tuple)) and len(
+        fill_value
+    ) == 2:
+        # if two values are supplied use these as samples bordering to our data
+        # and interpolate between:
+        ls = fill_value[0]
+        rs = fill_value[1]
+        # include left and right sample (delta + 2)
+        interpolation = np.linspace(ls, rs, delta + 2)
+        # cut ls and rs and ensure correct data type
+        temp = np.require(interpolation[1:-1], dtype=np.dtype(dtype))
+    else:
+        temp = np.ones(delta, dtype=np.dtype(dtype))
+        temp *= fill_value
+    return temp
+
+
+def db_to_linear(
+    dbgain: Union[float, list[float]]
+) -> Union[float, list[float]]:
+    """Converts a gain in dB to a linear gain factor.
+
+    This function is adapted from the ObsPy library:
+    https://docs.obspy.org/index.html
+
+    Args:
+        dbgain (float): Gain in dB.
+
+    Returns:
+        float: Linear gain factor.
+
+    Examples:
+    >>> dbgain_to_lineargain(6)
+    2.0
+    >>> dbgain_to_lineargain(20)
+    10.0
+    """
+    if isinstance(dbgain, list):
+        return [10.0 ** (gain / 20.0) for gain in dbgain]
+    return 10.0 ** (dbgain / 20.0)
+
+
+def round_away(number: Union[int, float]) -> int:
+    """Function to round a number away from zero to the nearest integer.
+    This is potentially desired behavior in the trim functions.
+
+    This function is adapted from the ObsPy library:
+    https://docs.obspy.org/index.html
+
+    Args:
+        number (Union[int, float]): Number to round.
+
+    Returns:
+        int: Rounded number.
+
+    Examples:
+    >>> round_away(2.5)
+    3
+    >>> round_away(-2.5)
+    -3
+
+    >>> round_away(10.5)
+    11
+    >>> round_away(-10.5)
+    -11
+
+    >>> round_away(11.0)
+    11
+    >>> round_away(-11.0)
+    -11
+    """
+    floor = np.floor(number)
+    ceil = np.ceil(number)
+    if (floor != ceil) and (abs(number - floor) == abs(ceil - number)):
+        return int(int(number) + int(np.sign(number)))
+    else:
+        return int(np.round(number))
+
+# def _chk_read(count: int) -> int:
+#     """Check if the read count is correct.
+
+#     Currently unused.
+
+#     Args:
+#         count (int): Read count.
+
+#     Returns:
+#         int: 0 if count is 0, -1 otherwise.
+#     """
+#     if count == 0:
+#         return -1
+#     return 0
+
+
+# def _swap_long(x: int) -> int:
+#     """Swap the byte order of a 32-bit integer.
+
+#     Not currently used.
+
+#     Args:
+#         x (int): Integer to swap.
+
+#     Returns:
+#         int: Swapped integer.
+#     """
+#     if x <= (2**16 - 1):
+#         x_hex = f"{x:04x}0000"
+#     else:
+#         x_hex = f"{x:08x}"
+#     return int(x_hex[6:8] + x_hex[4:6] + x_hex[2:4] + x_hex[0:2], base=16)
+
+
+# def _swap_short(x: int) -> int:
+#     """Swap the byte order of a 16-bit integer.
+
+#     Not currently used.
+
+#     Args:
+#         x (int): Integer to swap.
+
+#     Returns:
+#         int: Swapped integer.
+#     """
+#     x_hex = f"{x:04x}"
+#     return int(x_hex[2:4] + x_hex[0:2], base=16)
+
+
+# def _swap_string(x: str) -> str:
+#     """Swap the byte order of a string.
+
+#     Not currently used.
+
+#     Args:
+#         x (str): String to swap.
+
+#     Returns:
+#         str: Swapped string.
+#     """
+#     k = 2 * int(len(x) / 2)
+#     new_str = ""
+#     for i in range(0, k, 2):
+#         new_str += x[i + 1] + x[i]
+#     return new_str
