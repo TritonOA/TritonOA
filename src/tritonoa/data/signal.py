@@ -25,6 +25,22 @@ class SignalParams:
     gain: float | list[float] = 0.0
     sensitivity: float | list[float] = 0.0
 
+    def check_dimensions(self, num_channels: int):
+        """Checks if the dimensions of the parameters match the channels.
+
+        Args:
+            channels (list): List of channels.
+        """
+        if not isinstance(self.gain, list):
+            self.gain = [self.gain] * num_channels
+        if not isinstance(self.sensitivity, list):
+            self.sensitivity = [self.sensitivity] * num_channels
+        if len(self.gain) != num_channels or len(self.sensitivity) != num_channels:
+            # TODO: Implement specific exception for this.
+            raise ValueError(
+                "The number of gains and sensitivities must match the number of channels."
+            )
+
 
 def get_filter(filt_type: str) -> callable:
     FILTER_REGISTRY = {
