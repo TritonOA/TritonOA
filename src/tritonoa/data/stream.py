@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# TODO: Swap data indexes to be (channels, time) instead of (time, channels)
+
 from __future__ import annotations
 from copy import copy, deepcopy
 from dataclasses import dataclass
@@ -8,7 +10,7 @@ import locale
 import logging
 import math
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 import warnings
 
 import numpy as np
@@ -16,10 +18,6 @@ import polars as pl
 import scipy
 import scipy.signal as signal
 
-# from tritonoa.data.dataset import CatalogueQuery, DatasetCatalogue
-# from tritonoa.data.formats.formats import FileFormat, validate_file_format
-# from tritonoa.data.formats.shru import read_data as read_shru_data
-# from tritonoa.data.formats.shru import condition_data as condition_shru_data
 from tritonoa.data.signal import get_filter
 from tritonoa.data.time import (
     TIME_CONVERSION_FACTOR,
@@ -61,9 +59,9 @@ class DataFormat(Enum):
 
 @dataclass
 class DataStreamStats:
-    channels: Optional[Union[int, list[int]]] = None
-    time_init: Optional[Union[float, np.datetime64]] = None
-    time_end: Optional[Union[float, np.datetime64]] = None
+    channels: Optional[int | list[int]] = None
+    time_init: Optional[float | np.datetime64] = None
+    time_end: Optional[float | np.datetime64] = None
     sampling_rate: Optional[float] = None
     units: Optional[str] = None
 
@@ -75,7 +73,7 @@ class DataStream:
 
     Args:
         stats (DataStreamStats): Data statistics.
-        waveform (Optional[np.ndarray], optional): Acoustic data. Defaults to None.
+        data (Optional[np.ndarray], optional): Acoustic data. Defaults to None.
 
     Returns:
         DataStream: Data stream object.
@@ -85,9 +83,10 @@ class DataStream:
     """
 
     stats: Optional[DataStreamStats]
-    waveform: Optional[np.ndarray] = None
+    data: Optional[np.ndarray] = None
 
-    def __getitem__(self, index: Union[int, slice]) -> np.ndarray:
+    def __getitem__(self, index: int | slice) -> np.ndarray:
+        # TODO: Swap dims
         """Returns data and time vector sliced by time index."""
         orig_timevec = self.time_vector
         stats = deepcopy(self.stats)
@@ -98,13 +97,14 @@ class DataStream:
             new_timevec = orig_timevec[index]
         stats.time_init = new_timevec[0]
         stats.time_end = new_timevec[-1]
-        waveform = self.waveform[index]
-        return DataStream(stats=stats, waveform=waveform)
+        data = self.data[index]
+        return DataStream(stats=stats, data=data)
 
     def __post_init__(self):
+        # TODO: Swap dims
         """Initializes data and time vector."""
         # Set time_init to 0 if not provided
-        if np.isnat(self.stats.time_init):
+        if self.stats.time_init is None:
             self.stats.time_init = np.timedelta64(0, "us")
 
         # Compute sampling rate if time_init and time_end are provided
@@ -120,7 +120,7 @@ class DataStream:
         # Set time_end if time_init and sampling rate are provided
         if (
             self.stats.time_init is not None
-            and np.isnat(self.stats.time_end)
+            and self.stats.time_end is None
             and self.stats.sampling_rate is not None
         ):
             self.stats.time_end = self.stats.time_init + np.timedelta64(
@@ -137,7 +137,7 @@ class DataStream:
     def __repr__(self) -> str:
         """Returns string representation of the object."""
         return (
-            f"DataStream(waveform={self.waveform}, "
+            f"DataStream(data={self.data}, "
             f"channels={self.stats.channels}, "
             f"num_channels={self.num_channels}, "
             f"num_samples={self.num_samples}, "
@@ -157,12 +157,12 @@ class DataStream:
         Raises:
             NoDataWarning: If no data is found in the object.
         """
-        if self.waveform is None:
+        if self.data is None:
             warnings.warn("No data in variable 'X'.", NoDataWarning)
             return None
-        if len(self.waveform.shape) == 1:
+        if len(self.data.shape) == 1:
             return 1
-        return self.waveform.shape[1]
+        return self.data.shape[0]
 
     @property
     def num_samples(self) -> int:
@@ -174,10 +174,10 @@ class DataStream:
         Raises:
             NoDataWarning: If no data is found in the object.
         """
-        if self.waveform is None:
+        if self.data is None:
             warnings.warn("No data in variable 'X'.", NoDataWarning)
             return None
-        return self.waveform.shape[0]
+        return self.data.shape[1]
 
     @property
     def time_vector(self) -> np.ndarray:
@@ -189,20 +189,36 @@ class DataStream:
         Raises:
             NoDataWarning: If no data is found in the object.
         """
-        if self.waveform is None:
+        if self.data is None:
             warnings.warn("No data in variable 'X'.", NoDataWarning)
             return None
         return datetime_linspace(
             start=self.stats.time_init, end=self.stats.time_end, num=self.num_samples
         )
 
+    @property
+    def seconds(self) -> np.ndarray:
+        """Returns time vector in seconds.
+
+        Returns:
+            np.ndarray: Time vector in seconds.
+
+        Raises:
+            NoDataWarning: If no data is found in the object.
+        """
+        if self.data is None:
+            warnings.warn("No data in variable 'X'.", NoDataWarning)
+            return None
+        time_int = self.time_vector.astype("int64") / TIME_CONVERSION_FACTOR
+        return time_int - time_int[0]
+
     def copy(self) -> DataStream:
         return deepcopy(self)
 
     def slice(
         self,
-        starttime: Optional[Union[int, float, np.datetime64]] = None,
-        endtime: Optional[Union[int, float, np.datetime64]] = None,
+        starttime: Optional[int | float | np.datetime64] = None,
+        endtime: Optional[int | float | np.datetime64] = None,
         nearest_sample: bool = True,
     ) -> DataStream:
         """Slices data by time."""
@@ -214,12 +230,12 @@ class DataStream:
 
     def write(self, path: Path) -> None:
         """Writes data to file."""
-        np.savez(path, waveform=self.waveform, stats=self.stats)
+        np.savez(path, data=self.data, stats=self.stats)
 
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""
         scipy.io.wavfile.write(
-            path, int(self.stats.sampling_rate), self.waveform.astype(np.int32)
+            path, int(self.stats.sampling_rate), self.data.astype(np.int32)
         )
 
     def decimate(
@@ -227,7 +243,7 @@ class DataStream:
         factor: int,
         n: Optional[int] = None,
         ftype: str = "iir",
-        axis: int = 0,
+        axis: int = 1,
         zero_phase: bool = True,
     ) -> DataStream:
         """Decimates data.
@@ -244,8 +260,8 @@ class DataStream:
             DataStream: Decimated data stream.
         """
 
-        self.waveform = signal.decimate(
-            self.waveform, factor, n, ftype, axis, zero_phase
+        self.data = signal.decimate(
+            self.data, factor, n, ftype, axis, zero_phase
         )
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
         return self
@@ -262,7 +278,7 @@ class DataStream:
             DataStream: Filtered data stream.
         """
         func = get_filter(filt_type)
-        self.waveform = func(data=self.waveform, fs=self.stats.sampling_rate, **kwargs)
+        self.data = func(data=self.data, fs=self.stats.sampling_rate, **kwargs)
         return self
 
     def max(self) -> np.ndarray:
@@ -271,8 +287,8 @@ class DataStream:
         Returns:
             np.ndarray: Maximum value of data.
         """
-        _max = np.atleast_1d(self.waveform.max(axis=0))
-        _min = np.atleast_1d(self.waveform.min(axis=0))
+        _max = np.atleast_1d(self.data.max(axis=1))
+        _min = np.atleast_1d(self.data.min(axis=1))
 
         for i in range(self.num_channels):
             if abs(_max[i]) < abs(_min[i]):
@@ -282,13 +298,14 @@ class DataStream:
 
     def trim(
         self,
-        starttime: Optional[Union[int, float, np.datetime64]] = None,
-        endtime: Optional[Union[int, float, np.datetime64]] = None,
+        starttime: Optional[int | float | np.datetime64] = None,
+        endtime: Optional[int | float | np.datetime64] = None,
         pad: bool = False,
         nearest_sample: bool = True,
         fill_value=None,
     ) -> DataStream:
         """Trims data by time.
+        # TODO: Swap dims
 
         NOTE: This function and its derivatives modify the object in place.
 
@@ -318,12 +335,14 @@ class DataStream:
 
     def _ltrim(
         self,
-        starttime: Union[int, float, np.datetime64],
+        starttime: int | float | np.datetime64,
         pad=False,
         nearest_sample=True,
         fill_value=None,
     ) -> DataStream:
-        """Trims all data of this object's waveform to given start time.
+        """Trims all data of this object's data to given start time.
+
+        # TODO: Swap dims
 
         NOTE: This function and its derivatives modify the object in place.
 
@@ -343,7 +362,7 @@ class DataStream:
             TypeError: If starttime is not of type float, int, or np.datetime64.
             Exception: If time offset between starttime and time_init is too large.
         """
-        dtype = self.waveform.dtype
+        dtype = self.data.dtype
 
         if isinstance(starttime, float) or isinstance(starttime, int):
             starttime = self.stats.time_init + np.timedelta64(
@@ -395,32 +414,34 @@ class DataStream:
         if delta < 0 and pad:
             try:
                 gap = create_empty_data_chunk(
-                    abs(delta), self.waveform.dtype, fill_value
+                    abs(delta), self.data.dtype, fill_value
                 )
             except ValueError:
                 raise Exception(
                     "Time offset between starttime and time_init too large."
                 )
-            self.waveform = np.ma.concatenate([gap, self.waveform], axis=0)
+            self.data = np.ma.concatenate([gap, self.data], axis=0)
             return self
         if starttime > self.stats.time_end:
-            self.waveform = np.empty(0, dtype=dtype)
+            self.data = np.empty(0, dtype=dtype)
             return self
         if delta > 0:
             try:
-                self.waveform = self.waveform[delta:]
+                self.data = self.data[delta:]
             except IndexError:
-                self.waveform = np.empty(0, dtype=dtype)
+                self.data = np.empty(0, dtype=dtype)
         return self
 
     def _rtrim(
         self,
-        endtime: Union[int, float, np.datetime64],
+        endtime: int | float | np.datetime64,
         pad=False,
         nearest_sample=True,
         fill_value=None,
     ) -> DataStream:
-        """Trims all data of this object's waveform to given end time.
+        """Trims all data of this object's data to given end time.
+
+        TODO: Swap dims
 
         NOTE: This function and its derivatives modify the object in place.
 
@@ -440,7 +461,7 @@ class DataStream:
             TypeError: If endtime is not of type float, int, or np.datetime64.
             Exception: If time offset between endtime and time_start is too large.
         """
-        dtype = self.waveform.dtype
+        dtype = self.data.dtype
 
         if isinstance(endtime, float) or isinstance(endtime, int):
             endtime = self.stats.time_end - np.timedelta64(
@@ -476,25 +497,25 @@ class DataStream:
             return self
         if delta > 0 and pad:
             try:
-                gap = create_empty_data_chunk(delta, self.waveform.dtype, fill_value)
+                gap = create_empty_data_chunk(delta, self.data.dtype, fill_value)
             except ValueError:
                 raise Exception(
                     "Time offset between starttime and time_start too large."
                 )
-            self.waveform = np.ma.concatenate([self.waveform, gap], axis=0)
+            self.data = np.ma.concatenate([self.data, gap], axis=0)
             return self
         if endtime < self.stats.time_init:
             self.stats.time_init = self.stats.time_end + np.timedelta64(
                 int(delta / self.stats.sampling_rate * TIME_CONVERSION_FACTOR),
                 TIME_PRECISION,
             )
-            self.waveform = np.empty(0, dtype=dtype)
+            self.data = np.empty(0, dtype=dtype)
             return self
         delta = abs(delta)
-        total = len(self.waveform) - delta
+        total = len(self.data) - delta
         if endtime == self.stats.time_init:
             total = 1
-        self.waveform = self.waveform[:total]
+        self.data = self.data[:total]
         self.stats.time_end = self.stats.time_init + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate),
             TIME_PRECISION,
@@ -507,95 +528,3 @@ class DataStream:
     #     raw_data, fixed_gain, sensitivity
     # )
 
-    # return DataStream(
-    #     stats=DataStreamStats(
-    #         channels=query.channels,
-    #         time_init=time_init,
-    #         time_end=time_end,
-    #         sampling_rate=sampling_rate,
-    #         units=units,
-    #     ),
-    #     waveform=waveform,
-    # )
-
-
-def select_records_by_time(
-    df: pl.DataFrame, time_start: np.datetime64, time_end: np.datetime64
-) -> pl.DataFrame:
-    """Select files by time."""
-    logging.debug(f"Selecting records by time: {time_start} to {time_end}.")
-    if time_start > time_end:
-        raise ValueError("time_start must be less than time_end.")
-    if np.isnat(time_start) and np.isnat(time_end):
-        logging.debug("No times provided; returning all rows.")
-        return df
-    if time_start is not None and np.isnat(time_end):
-        logging.debug("Only start time provided; returning all rows after.")
-        row_numbers = df.filter(pl.col("timestamp") >= time_start)["row_nr"].to_list()
-        row_numbers.insert(0, row_numbers[0] - 1)
-        mask = pl.col("row_nr").is_in(row_numbers)
-        return df.filter(mask)
-    if np.isnat(time_start) and time_end is not None:
-        logging.debug("Only end time provided; returning all rows before.")
-        return df.filter(pl.col("timestamp") <= time_end)
-
-    logging.debug("Start and end times provided; returning rows between.")
-    last_row_before_start = df.filter(pl.col("timestamp") < time_start)["row_nr"].max()
-    row_numbers = df.filter(
-        (pl.col("timestamp") >= time_start) & (pl.col("timestamp") <= time_end)
-    )["row_nr"].to_list()
-    row_numbers.insert(0, last_row_before_start)
-    mask = pl.col("row_nr").is_in(row_numbers)
-    return df.filter(mask)
-
-
-def report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None:
-    """Logs buffer size.
-
-    Args:
-        buffer (int): Buffer length in samples.
-        num_channels (int): Number of channels.
-        sampling_rate (float): Sampling rate.
-
-    Returns:
-        None
-    """
-    logging.debug(
-        f"MAX BUFFER ---- length: {buffer:e} samples | "
-        f"length per channel: {int(buffer / num_channels)} samples | "
-        f"size: {8 * buffer / 1e6:n} MB | "
-        f"duration: {buffer / sampling_rate / num_channels / 60:.3f} min with {num_channels} channels."
-    )
-
-
-def compute_expected_buffer(df: pl.DataFrame) -> int:
-    """Computes expected samples.
-
-    Args:
-        df (pl.DataFrame): Data frame.
-
-    Returns:
-        int: Expected samples.
-    """
-    expected_samples = 0
-    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
-        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
-        expected_samples += df.filter(
-            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
-        )["npts"].sum()
-    logging.debug(f"Expected samples: {expected_samples}")
-    return expected_samples
-
-
-# def _get_reader(file_format: FileFormat) -> callable:
-#     if file_format == FileFormat.SHRU:
-#         return read_shru_data
-#     else:
-#         raise ValueError(f"File format {file_format} not supported.")
-
-
-# def _get_conditioner(file_format: FileFormat) -> callable:
-#     if file_format == FileFormat.SHRU:
-#         return condition_shru_data
-#     else:
-#         raise ValueError(f"File format {file_format} not supported.")
