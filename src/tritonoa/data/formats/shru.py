@@ -12,7 +12,8 @@ import warnings
 import numpy as np
 
 import tritonoa.data.formats.base as base
-from tritonoa.data.hydrophone import HydrophoneSpecs
+from tritonoa.data.signal import SignalParams
+from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
     TIME_CONVERSION_FACTOR,
     TIME_PRECISION,
@@ -36,17 +37,16 @@ class SHRUFileFormat(base.FileFormatCheckerMixin, Enum):
 
 @dataclass(kw_only=True)
 class SHRUDataRecord(base.DataRecord):
+    # TODO: Reconcile this w/ the signal module.
     """Data record object for SHRU files.
 
     Attributes:
         fixed_gain (float): Fixed gain.
-        hydrophone_sensitivity (float): Hydrophone sensitivity.
-        hydrophone_SN (int): Hydrophone serial number.
+        sensitivity (float): Hydrophone sensitivity.
     """
 
-    fixed_gain: float = 0.0
-    hydrophone_sensitivity: float = 1.0
-    hydrophone_SN: Optional[int] = None
+    gain: float = 0.0
+    sensitivity: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -167,13 +167,55 @@ class SHRUHeader:
 
 
 class SHRUReader(base.BaseReader):
+
     def read(
+        self,
+        file_path: Path,
+        # records: Optional[int | list[int]] = None,
+        channels: Optional[int | list[int]] = None,
+        clock: ClockParameters = ClockParameters(),
+        conditioner: SignalParams = SignalParams(),
+    ) -> DataStream:
+
+        if isinstance(channels, int):
+            channels = [channels]
+
+        # Read data and headers
+        raw_data, header = self._read_binary_file(
+            file_path,
+            # records=records,
+            channels=channels,
+        )
+
+        # Condition 24-bit data into pressure (uPa)
+        data, units = self.condition_data(raw_data, conditioner=conditioner)
+
+        try:
+            ts_orig = _get_timestamp(header)
+            ts = correct_clock_drift(ts_orig, clock)
+            fs = correct_sampling_rate(header.rhfs, clock.drift_rate)
+        except:
+            warnings.warn(
+                "Unable to find timestamp; setting to 0; no clock drift applied."
+            )
+            ts = 0.0
+            fs = header.rhfs
+
+        return DataStream(
+            stats=DataStreamStats(
+                channels=channels,
+                time_init=ts,
+                sampling_rate=fs,
+                units=units,
+            ),
+            data=data,
+        )
+
+    def _read_binary_file(
         self,
         file_path: Path,
         records: Optional[int | list[int]] = None,
         channels: Optional[int | list[int]] = None,
-        fixed_gain: float | list[float] = 20.0,
-        headers: Optional[list[SHRUHeader]] = None,
     ) -> tuple[np.ndarray, SHRUHeader]:
         """Read 24-bit data from a SHRU file.
 
@@ -192,8 +234,7 @@ class SHRUReader(base.BaseReader):
             ValueError: If the length of fixed_gain does not match the length of channels.
             ValueError: If the record is corrupted.
         """
-        if headers is None:
-            headers = self.read_headers(file_path)
+        headers = self.read_headers(file_path)
 
         if records is None:
             records = list(range(len(headers)))
@@ -205,11 +246,6 @@ class SHRUReader(base.BaseReader):
             channels = list(range(nch))
         elif not isinstance(channels, list):
             channels = [channels]
-
-        if not isinstance(fixed_gain, list):
-            fixed_gain = [fixed_gain] * len(channels)
-        if isinstance(fixed_gain, list) and len(fixed_gain) != len(channels):
-            raise ValueError("Length of fixed_gain must match length of channels.")
 
         if any((i > nch - 1) for i in channels):
             raise ValueError(
@@ -249,7 +285,7 @@ class SHRUReader(base.BaseReader):
                 # Store data
                 data[:, i * spts : (i + 1) * spts] = data_block.T
 
-        return data.T, header1
+        return data, header1
 
     @staticmethod
     def _read_header(fid: BinaryIO) -> tuple[SHRUHeader, bool]:
@@ -427,7 +463,7 @@ class SHRUReader(base.BaseReader):
                 headers.append(header)
 
     def condition_data(
-        self, data: np.ndarray, fixed_gain: list[float], sensitivity: list[float]
+        self, data: np.ndarray, conditioner: SignalParams
     ) -> tuple[np.ndarray, str]:
         """Condition 24-bit data to pressure.
 
@@ -439,8 +475,20 @@ class SHRUReader(base.BaseReader):
         Returns:
             tuple[np.ndarray, str]: Converted data and units.
         """
-        linear_fixed_gain = db_to_linear(fixed_gain)
-        linear_sensitivity = db_to_linear(sensitivity)
+        try:
+            conditioner.check_dimensions(data.shape[0])
+        except ValueError as e:  # TODO: Implement specific exception for this.
+            warnings.warn(
+                f"Incorrect number of gain or sensitivity values set: {e}"
+                f"len(gain)={len(conditioner.gain)}, "
+                f"len(sensitivity)={len(conditioner.sensitivity)}, "
+                f"len(channels)={data.shape[1]}."
+                f"Returning the data unconditioned."
+            )
+            return data, "counts"
+
+        linear_fixed_gain = db_to_linear(conditioner.gain)
+        linear_sensitivity = db_to_linear(conditioner.sensitivity)
         data, _ = self._convert_to_voltage(data, linear_fixed_gain)
         return self._convert_to_pressure(data, linear_sensitivity)
 
@@ -483,7 +531,7 @@ class SHRUReader(base.BaseReader):
         Returns:
             tuple[np.ndarray, str]: Converted data and units.
         """
-        return data * np.array(linear_sensitivity)[np.newaxis, :], "uPa"
+        return data * np.array(linear_sensitivity)[:, np.newaxis], "uPa"
 
     @staticmethod
     def _convert_to_voltage(
@@ -499,7 +547,7 @@ class SHRUReader(base.BaseReader):
             tuple[np.ndarray, str]: Converted data and units.
         """
         norm_factor = ADC_HALFSCALE / ADC_MAXVALUE / np.array(linear_fixed_gain)
-        return data * norm_factor[np.newaxis, :], "V"
+        return data * norm_factor[:, np.newaxis], "V"
 
     def get_data_record(
         self, fid: BinaryIO, nch: int, spts: int
@@ -556,9 +604,9 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
         record_number: int,
         header: SHRUHeader,
         clock: ClockParameters,
-        hydrophones: HydrophoneSpecs,
+        conditioner: SignalParams,
     ):
-        ts = self.__get_timestamp(header)
+        ts = _get_timestamp(header)
         fs = header.rhfs
         return SHRUDataRecord(
             filename=filename,
@@ -570,24 +618,23 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
             sampling_rate=correct_sampling_rate(fs, clock.drift_rate),
             npts=header.npts,
             nch=header.ch,
-            fixed_gain=hydrophones.fixed_gain,
-            hydrophone_sensitivity=hydrophones.sensitivity,
-            hydrophone_SN=hydrophones.serial_number,
+            gain=conditioner.gain,
+            sensitivity=conditioner.sensitivity,
         )
 
-    @staticmethod
-    def __get_timestamp(header: SHRUHeader) -> np.datetime64:
-        """Return the timestamp of a data record header.
 
-        Args:
-            header (SHRUHeader): Data record header.
+def _get_timestamp(header: SHRUHeader) -> np.datetime64:
+    """Return the timestamp of a data record header.
 
-        Returns:
-            np.datetime64: Timestamp.
-        """
-        year = header.date[0]
-        yd = header.date[1]
-        minute = header.time[0]
-        millisec = header.time[1]
-        microsec = header.microsec
-        return convert_to_datetime(year, yd, minute, millisec, microsec)
+    Args:
+        header (SHRUHeader): Data record header.
+
+    Returns:
+        np.datetime64: Timestamp.
+    """
+    year = header.date[0]
+    yd = header.date[1]
+    minute = header.time[0]
+    millisec = header.time[1]
+    microsec = header.microsec
+    return convert_to_datetime(year, yd, minute, millisec, microsec)
