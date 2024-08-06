@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# TODO: Place acknowledgement/license for SIOREAD here.
+
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 import datetime
