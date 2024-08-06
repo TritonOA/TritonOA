@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 
+import logging
 from pathlib import Path
 from typing import Optional
+
+import numpy as np
+import polars as pl
 
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.formats.shru import SHRUReader
 from tritonoa.data.formats.sio import SIOReader
 from tritonoa.data.formats.wav import WAVReader
-from tritonoa.data.stream import DataStream
+from tritonoa.data.stream import DataStream, DataStreamStats
 
 
 class DataReader:
@@ -19,14 +23,10 @@ class DataReader:
         }
     
     def read(self, file_path: Path, data_type: Optional[str] = None, **kwargs) -> DataStream:
-        file_format = factory.validate_file_format(file_path.suffix, data_type)
-        print(file_format)
-        reader = self._readers[file_format.value]()
+        file_format = factory.get_file_format(file_path.suffix, data_type)
+        reader = self._readers[file_format]()
         return reader.read(file_path, **kwargs)
-        # TODO: Return a DataStream object with the data and header information.
-        # This interface should be conducted with the format-specific reader 
-        # implementations since each format will have its own unique considerations.        
-    
+        
 
 class DatasetReader:
     def read(self, file_path: Path, data_type: Optional[str] = None, **kwargs) -> DataStream:
@@ -156,3 +156,73 @@ class DatasetReader:
 #             waveform=waveform,
 #         )
 #         return ds.trim(starttime=query.time_start, endtime=query.time_end)
+
+
+
+
+def select_records_by_time(
+    df: pl.DataFrame, time_start: np.datetime64, time_end: np.datetime64
+) -> pl.DataFrame:
+    """Select files by time."""
+    logging.debug(f"Selecting records by time: {time_start} to {time_end}.")
+    if time_start > time_end:
+        raise ValueError("time_start must be less than time_end.")
+    if np.isnat(time_start) and np.isnat(time_end):
+        logging.debug("No times provided; returning all rows.")
+        return df
+    if time_start is not None and np.isnat(time_end):
+        logging.debug("Only start time provided; returning all rows after.")
+        row_numbers = df.filter(pl.col("timestamp") >= time_start)["row_nr"].to_list()
+        row_numbers.insert(0, row_numbers[0] - 1)
+        mask = pl.col("row_nr").is_in(row_numbers)
+        return df.filter(mask)
+    if np.isnat(time_start) and time_end is not None:
+        logging.debug("Only end time provided; returning all rows before.")
+        return df.filter(pl.col("timestamp") <= time_end)
+
+    logging.debug("Start and end times provided; returning rows between.")
+    last_row_before_start = df.filter(pl.col("timestamp") < time_start)["row_nr"].max()
+    row_numbers = df.filter(
+        (pl.col("timestamp") >= time_start) & (pl.col("timestamp") <= time_end)
+    )["row_nr"].to_list()
+    row_numbers.insert(0, last_row_before_start)
+    mask = pl.col("row_nr").is_in(row_numbers)
+    return df.filter(mask)
+
+
+def report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None:
+    """Logs buffer size.
+
+    Args:
+        buffer (int): Buffer length in samples.
+        num_channels (int): Number of channels.
+        sampling_rate (float): Sampling rate.
+
+    Returns:
+        None
+    """
+    logging.debug(
+        f"MAX BUFFER ---- length: {buffer:e} samples | "
+        f"length per channel: {int(buffer / num_channels)} samples | "
+        f"size: {8 * buffer / 1e6:n} MB | "
+        f"duration: {buffer / sampling_rate / num_channels / 60:.3f} min with {num_channels} channels."
+    )
+
+
+def compute_expected_buffer(df: pl.DataFrame) -> int:
+    """Computes expected samples.
+
+    Args:
+        df (pl.DataFrame): Data frame.
+
+    Returns:
+        int: Expected samples.
+    """
+    expected_samples = 0
+    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
+        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
+        expected_samples += df.filter(
+            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
+        )["npts"].sum()
+    logging.debug(f"Expected samples: {expected_samples}")
+    return expected_samples
