@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# TODO: Replace hydrophone specs w/ signal params
+
 from dataclasses import dataclass
 from enum import Enum
 import logging
