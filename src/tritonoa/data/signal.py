@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+from dataclasses import dataclass
 import warnings
 
 import numpy as np
@@ -10,6 +11,19 @@ import scipy.signal as signal
 # import cupyx.scipy.signal as signal
 # except ImportError:
 # import scipy.signal as signal
+
+
+@dataclass
+class SignalParams:
+    """Specifications for one or more hydrophones.
+
+    Args:
+        gain (list[float] | optional): Gain [dB], converts counts to V. Defaults to 0.0 (no effect).
+        sensitivity (list[float] | optional): Sensitivity [dB], converts V to uPa. Defaults to 0.0 (no effect).
+    """
+
+    gain: float | list[float] = 0.0
+    sensitivity: float | list[float] = 0.0
 
 
 def get_filter(filt_type: str) -> callable:
