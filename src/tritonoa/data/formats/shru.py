@@ -592,6 +592,7 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
         clock: ClockParameters,
         conditioner: SignalParams,
     ):
+        conditioner.fill_like_channels(header.ch)
         ts = _get_timestamp(header)
         fs = header.rhfs
         return base.DataRecord(
