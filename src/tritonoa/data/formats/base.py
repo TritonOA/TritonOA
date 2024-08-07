@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+# TODO: Clean up base class argument specs and returned types.
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
