@@ -142,27 +142,6 @@ def datetime_linspace(start: np.datetime64, end: np.datetime64, num: int) -> np.
     )
 
 
-# def convert_datetime64_to_pldatetime(np_datetime64: np.datetime64) -> str:
-#     np_datetime64_us = np_datetime64.astype("datetime64[us]")
-#     print(type(np_datetime64_us))
-#     int64_us = np_datetime64_us.astype("int64")
-#     print(type(int64_us))
-
-#     # Ensure `values` is a list or an array
-#     sr = pl.Series(values=[int64_us], dtype=pl.Int64)
-
-#     return sr.cast(pl.Datetime("us"))
-
-
-# def convert_datetime64_to_pldatetime(np_datetime64: np.datetime64) -> str:
-#     np_datetime64_us = np_datetime64.astype("datetime64[us]")
-#     print(type(np_datetime64_us))
-#     int64_us = np_datetime64_us.astype("int64")
-#     print(type(int64_us))
-#     sr = pl.Series(values=int64_us, dtype=pl.Int64)
-#     return sr.cast(pl.Datetime("us"))
-
-
 def to_ydarray(list_of_datetimes: list[list[np.datetime64]]) -> np.ndarray:
     """Convert list of datetimes to 3D array.
 
