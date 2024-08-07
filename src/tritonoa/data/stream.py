@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
+
 from copy import copy, deepcopy
 from dataclasses import dataclass
 from enum import Enum
