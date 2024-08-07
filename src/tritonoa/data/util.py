@@ -9,7 +9,7 @@ def create_empty_data_chunk(
     delta: int, dtype: np.dtype, fill_value: Optional[Union[int, float]] = None
 ) -> np.ndarray:
     """
-    Creates an NumPy array depending on the given data type and fill value.
+    Creates a NumPy array depending on the given data type and fill value.
 
     If no ``fill_value`` is given a masked array will be returned.
 
@@ -59,9 +59,7 @@ def create_empty_data_chunk(
     return temp
 
 
-def db_to_linear(
-    dbgain: Union[float, list[float]]
-) -> Union[float, list[float]]:
+def db_to_linear(dbgain: Union[float, list[float]]) -> Union[float, list[float]]:
     """Converts a gain in dB to a linear gain factor.
 
     This function is adapted from the ObsPy library:
@@ -119,6 +117,7 @@ def round_away(number: Union[int, float]) -> int:
         return int(int(number) + int(np.sign(number)))
     else:
         return int(np.round(number))
+
 
 # def _chk_read(count: int) -> int:
 #     """Check if the read count is correct.

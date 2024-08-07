@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 
-# TODO: Swap data indexes to be (channels, time) instead of (time, channels)
-
 from __future__ import annotations
 from copy import copy, deepcopy
 from dataclasses import dataclass
 from enum import Enum
 import locale
-import logging
 import math
 from pathlib import Path
 from typing import Optional
 import warnings
 
 import numpy as np
-import polars as pl
 import scipy
 import scipy.signal as signal
 
@@ -68,7 +64,6 @@ class DataStreamStats:
 
 @dataclass
 class DataStream:
-    # TODO: Enable time vector construction
     """Contains acoustic data and data statistics.
 
     Args:
@@ -86,7 +81,6 @@ class DataStream:
     data: Optional[np.ndarray] = None
 
     def __getitem__(self, index: int | slice) -> np.ndarray:
-        # TODO: Swap dims
         """Returns data and time vector sliced by time index."""
         orig_timevec = self.time_vector
         stats = deepcopy(self.stats)
@@ -97,11 +91,10 @@ class DataStream:
             new_timevec = orig_timevec[index]
         stats.time_init = new_timevec[0]
         stats.time_end = new_timevec[-1]
-        data = self.data[index]
+        data = self.data[:, index]
         return DataStream(stats=stats, data=data)
 
     def __post_init__(self):
-        # TODO: Swap dims
         """Initializes data and time vector."""
         # Set time_init to 0 if not provided
         if self.stats.time_init is None:
@@ -243,7 +236,6 @@ class DataStream:
         factor: int,
         n: Optional[int] = None,
         ftype: str = "iir",
-        axis: int = 1,
         zero_phase: bool = True,
     ) -> DataStream:
         """Decimates data.
@@ -252,7 +244,6 @@ class DataStream:
             factor (int): Decimation factor.
             n (int, optional): The order of the filter. Defaults to None.
             ftype (str, optional): The type of the filter. Defaults to 'iir'.
-            axis (int, optional): The axis along which to decimate. Defaults to 0.
             zero_phase (bool, optional): Prevent phase shift by filtering forward
                 and backward. Defaults to True.
 
@@ -261,7 +252,7 @@ class DataStream:
         """
 
         self.data = signal.decimate(
-            self.data, factor, n, ftype, axis, zero_phase
+            self.data, factor, n=n, ftype=ftype, axis=1, zero_phase=zero_phase
         )
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
         return self
@@ -305,7 +296,6 @@ class DataStream:
         fill_value=None,
     ) -> DataStream:
         """Trims data by time.
-        # TODO: Swap dims
 
         NOTE: This function and its derivatives modify the object in place.
 
@@ -342,8 +332,6 @@ class DataStream:
     ) -> DataStream:
         """Trims all data of this object's data to given start time.
 
-        # TODO: Swap dims
-
         NOTE: This function and its derivatives modify the object in place.
 
         This function is adapted from the ObsPy library:
@@ -368,7 +356,7 @@ class DataStream:
             starttime = self.stats.time_init + np.timedelta64(
                 int(starttime * TIME_CONVERSION_FACTOR), TIME_PRECISION
             )
-        elif not isinstance(starttime, np.datetime64):
+        if not isinstance(starttime, np.datetime64):
             raise TypeError("starttime must be of type float, int, or np.datetime64.")
 
         if nearest_sample:
@@ -413,21 +401,19 @@ class DataStream:
             return self
         if delta < 0 and pad:
             try:
-                gap = create_empty_data_chunk(
-                    abs(delta), self.data.dtype, fill_value
-                )
+                gap = create_empty_data_chunk(abs(delta), self.data.dtype, fill_value)
             except ValueError:
                 raise Exception(
                     "Time offset between starttime and time_init too large."
                 )
-            self.data = np.ma.concatenate([gap, self.data], axis=0)
+            self.data = np.ma.concatenate([gap, self.data], axis=1)
             return self
         if starttime > self.stats.time_end:
             self.data = np.empty(0, dtype=dtype)
             return self
         if delta > 0:
             try:
-                self.data = self.data[delta:]
+                self.data = self.data[:, delta:]
             except IndexError:
                 self.data = np.empty(0, dtype=dtype)
         return self
@@ -440,8 +426,6 @@ class DataStream:
         fill_value=None,
     ) -> DataStream:
         """Trims all data of this object's data to given end time.
-
-        TODO: Swap dims
 
         NOTE: This function and its derivatives modify the object in place.
 
@@ -515,16 +499,9 @@ class DataStream:
         total = len(self.data) - delta
         if endtime == self.stats.time_init:
             total = 1
-        self.data = self.data[:total]
+        self.data = self.data[:, :total]
         self.stats.time_end = self.stats.time_init + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate),
             TIME_PRECISION,
         )
         return self
-
-
-    # Condition data and get units:
-    # data, units = _get_conditioner(file_format=validate_file_format(filename.suffix))(
-    #     raw_data, fixed_gain, sensitivity
-    # )
-

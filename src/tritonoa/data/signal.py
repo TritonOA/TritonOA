@@ -81,9 +81,9 @@ def bandpass(
     )
     sos = signal.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=0)
-        return signal.sosfilt(sos, firstpass[:-1], axis=0)[:-1]
-    return signal.sosfilt(sos, data, axis=0)
+        firstpass = signal.sosfilt(sos, data, axis=1)
+        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return signal.sosfilt(sos, data, axis=1)
 
 
 def bandstop(
@@ -114,9 +114,9 @@ def bandstop(
     )
     sos = signal.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=0)
-        return signal.sosfilt(sos, firstpass[:-1], axis=0)[:-1]
-    return signal.sosfilt(sos, data, axis=0)
+        firstpass = signal.sosfilt(sos, data, axis=1)
+        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return signal.sosfilt(sos, data, axis=1)
 
 
 def highpass(
@@ -136,9 +136,9 @@ def highpass(
     )
     sos = signal.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=0)
-        return signal.sosfilt(sos, firstpass[:-1], axis=0)[:-1]
-    return signal.sosfilt(sos, data, axis=0)
+        firstpass = signal.sosfilt(sos, data, axis=1)
+        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return signal.sosfilt(sos, data, axis=1)
 
 
 def lowpass(
@@ -164,6 +164,6 @@ def lowpass(
     )
     sos = signal.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=0)
-        return signal.sosfilt(sos, firstpass[:-1], axis=0)[:-1]
-    return signal.sosfilt(sos, data, axis=0)
+        firstpass = signal.sosfilt(sos, data, axis=1)
+        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return signal.sosfilt(sos, data, axis=1)
