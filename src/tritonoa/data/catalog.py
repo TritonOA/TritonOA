@@ -196,7 +196,7 @@ class Catalog:
         Returns:
             None
         """
-        self.df = pl.read_json(filepath)
+        self.df = pl.DataFrame.deserialize(filepath, format="json")
 
     def _read_mat(self, filepath: Path) -> None:
         """Read the record catalogue from MAT file.
