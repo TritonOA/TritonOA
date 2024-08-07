@@ -33,6 +33,8 @@ class DataRecord:
     sampling_rate: float
     npts: Optional[int] = None
     nch: Optional[int] = None
+    gain: float = 0.0
+    sensitivity: float = 0.0
 
 
 class FileFormatCheckerMixin:

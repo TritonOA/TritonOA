@@ -12,8 +12,8 @@ import polars as pl
 import scipy.io
 
 from tritonoa.data.formats import factory
-from tritonoa.data.hydrophone import HydrophoneSpecs
-from tritonoa.data.time import ClockParameters, TIME_PRECISION, to_ydarray
+from tritonoa.data.signal import SignalParams
+from tritonoa.data.time import TIME_PRECISION, ClockParameters, to_ydarray
 
 
 @dataclass
@@ -49,7 +49,7 @@ class Catalog:
         dataset_path: Path,
         glob_pattern: str = "*",
         clock_params: ClockParameters = ClockParameters(),
-        hydrophone_params: Optional[HydrophoneSpecs] = HydrophoneSpecs(),  # TODO: Implement using kwargs
+        conditioner: SignalParams = SignalParams(),
         record_fmt_callback: Optional[callable] = None,
     ) -> pl.DataFrame:
         files = self._get_files(dataset_path, glob_pattern)
@@ -69,7 +69,7 @@ class Catalog:
                         record_number=i,
                         header=header,
                         clock=clock_params,
-                        hydrophones=hydrophone_params,  # TODO: Implement using kwargs
+                        conditioner=conditioner,
                     )
                 )
             
@@ -98,14 +98,11 @@ class Catalog:
             return ",".join([str(i) for i in lst])
 
         return df.with_columns(
-            pl.col("fixed_gain").map_elements(
+            pl.col("gain").map_elements(
                 _to_list, return_dtype=pl.List(pl.Float64)
             ),
-            pl.col("hydrophone_sensitivity").map_elements(
+            pl.col("sensitivity").map_elements(
                 _to_list, return_dtype=pl.List(pl.Float64)
-            ),
-            pl.col("hydrophone_SN").map_elements(
-                _to_list, return_dtype=pl.List(pl.Int32)
             ),
         )
 
@@ -180,11 +177,10 @@ class Catalog:
             "sampling_rate_orig": [
                 record.sampling_rate_orig for record in self.records
             ],
-            "fixed_gain": [record.fixed_gain for record in self.records],
-            "hydrophone_sensitivity": [
-                record.hydrophone_sensitivity for record in self.records
+            "gain": [record.gain for record in self.records],
+            "sensitivity": [
+                record.sensitivity for record in self.records
             ],
-            "hydrophone_SN": [record.hydrophone_SN for record in self.records],
         }
     
     def _records_to_mdict(self) -> dict:
@@ -227,9 +223,8 @@ class Catalog:
                 "timestamps_orig": to_ydarray(timestamps_orig),
                 "rhfs_orig": self.records[0].sampling_rate_orig,
                 "rhfs": self.records[0].sampling_rate,
-                "fixed_gain": self.records[0].fixed_gain,
-                "hydrophone_sensitivity": self.records[0].hydrophone_sensitivity,
-                "hydrophone_SN": self.records[0].hydrophone_SN,
+                "gain": self.records[0].gain,
+                "sensitivity": self.records[0].sensitivity,
             }
         }
     

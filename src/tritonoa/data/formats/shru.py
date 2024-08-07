@@ -22,7 +22,7 @@ from tritonoa.data.time import (
     correct_clock_drift,
     correct_sampling_rate,
 )
-from tritonoa.data.util import db_to_linear
+from tritonoa.data.signal import db_to_linear
 
 ADC_HALFSCALE = 2.5  # ADC half scale volts (+/- half scale is ADC i/p range)
 ADC_MAXVALUE = 2**23  # ADC maximum halfscale o/p value, half the 2's complement range
@@ -33,20 +33,6 @@ BYTES_PER_SAMPLE = 3
 class SHRUFileFormat(base.FileFormatCheckerMixin, Enum):
     FORMAT = "SHRU"
     D23 = ".D23"
-
-
-@dataclass(kw_only=True)
-class SHRUDataRecord(base.DataRecord):
-    # TODO: Reconcile this w/ the signal module.
-    """Data record object for SHRU files.
-
-    Attributes:
-        fixed_gain (float): Fixed gain.
-        sensitivity (float): Hydrophone sensitivity.
-    """
-
-    gain: float = 0.0
-    sensitivity: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -571,7 +557,7 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
     file_format = "SHRU"
 
     @staticmethod
-    def callback(records: list[SHRUDataRecord]) -> list[SHRUDataRecord]:
+    def callback(records: list[base.DataRecord]) -> list[base.DataRecord]:
         """Format SHRU records.
 
         The time stamp of the first record in the 4-channel SHRU files seem
@@ -608,7 +594,7 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
     ):
         ts = _get_timestamp(header)
         fs = header.rhfs
-        return SHRUDataRecord(
+        return base.DataRecord(
             filename=filename,
             record_number=record_number,
             file_format=self.file_format,
