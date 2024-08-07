@@ -31,15 +31,23 @@ class SignalParams:
         Args:
             channels (list): List of channels.
         """
-        if not isinstance(self.gain, list):
-            self.gain = [self.gain] * num_channels
-        if not isinstance(self.sensitivity, list):
-            self.sensitivity = [self.sensitivity] * num_channels
+        self.fill_like_channels(num_channels)
         if len(self.gain) != num_channels or len(self.sensitivity) != num_channels:
             # TODO: Implement specific exception for this.
             raise ValueError(
                 "The number of gains and sensitivities must match the number of channels."
             )
+
+    def fill_like_channels(self, num_channels: int):
+        """Fills the parameters to match the number of channels.
+
+        Args:
+            num_channels (int): Number of channels.
+        """
+        if not isinstance(self.gain, list):
+            self.gain = [self.gain] * num_channels
+        if not isinstance(self.sensitivity, list):
+            self.sensitivity = [self.sensitivity] * num_channels
 
 
 def db_to_linear(dbgain: float | list[float]) -> float | list[float]:
