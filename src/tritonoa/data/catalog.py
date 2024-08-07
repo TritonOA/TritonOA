@@ -4,6 +4,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
+from functools import partial
 import logging
 from pathlib import Path
 from typing import Optional, Protocol
@@ -11,9 +12,18 @@ from typing import Optional, Protocol
 import polars as pl
 import scipy.io
 
+from tritonoa.data.formats.base import DataRecord
 from tritonoa.data.formats import factory
 from tritonoa.data.signal import SignalParams
-from tritonoa.data.time import TIME_PRECISION, ClockParameters, to_ydarray
+from tritonoa.data.time import (
+    TIME_PRECISION,
+    ClockParameters,
+    convert_yydfrac_to_timestamp,
+    to_ydarray,
+)
+
+
+MAT_KEYS = ["__header__", "__version__", "__globals__"]
 
 
 @dataclass
@@ -23,16 +33,10 @@ class Header(Protocol):
     ...
 
 
-@dataclass
-class DataRecord(Protocol):
-    """Data record object."""
-
-    ...
-
-
 class CatalogueFileFormat(Enum):
     """File formats for record catalogues."""
 
+    BIN = "bin"
     CSV = "csv"
     JSON = "json"
     MAT = "mat"
@@ -59,8 +63,6 @@ class Catalog:
             formatter = factory.get_formatter(file.suffix)
             headers = reader.read_headers(file)
 
-            # if record_fmt_callback is None:
-
             records_from_file = []
             for i, header in enumerate(headers):
                 records_from_file.append(
@@ -72,8 +74,11 @@ class Catalog:
                         conditioner=conditioner,
                     )
                 )
-            
-            corrected_records = formatter.callback(records_from_file)
+
+            if record_fmt_callback is not None:
+                corrected_records = record_fmt_callback(records_from_file)
+            else:
+                corrected_records = formatter.callback(records_from_file)
             records.extend(corrected_records)
             logging.debug(
                 f"{len(records) + 1} records | {j}/{len(files)} files processed."
@@ -81,7 +86,6 @@ class Catalog:
 
         self.records = records
         self.df = self._records_to_df()
-        print(self.df)
         return self.df
 
     def _format_df_for_csv(self, df: pl.DataFrame) -> pl.DataFrame:
@@ -94,15 +98,17 @@ class Catalog:
             pl.DataFrame: Polars DataFrame.
         """
 
-        def _to_list(lst: list):
+        def _to_list(lst: float | list) -> str:
             return ",".join([str(i) for i in lst])
 
         return df.with_columns(
             pl.col("gain").map_elements(
-                _to_list, return_dtype=pl.List(pl.Float64)
+                _to_list,
+                return_dtype=pl.String,
             ),
             pl.col("sensitivity").map_elements(
-                _to_list, return_dtype=pl.List(pl.Float64)
+                _to_list,
+                return_dtype=pl.String,
             ),
         )
 
@@ -134,6 +140,8 @@ class Catalog:
         if extension not in CatalogueFileFormat:
             raise ValueError(f"File format '{extension}' is not recognized.")
 
+        if extension == CatalogueFileFormat.BIN.value:
+            self._read_bin(filepath)
         if extension == CatalogueFileFormat.CSV.value:
             self._read_csv(filepath)
         if extension == CatalogueFileFormat.JSON.value:
@@ -141,6 +149,67 @@ class Catalog:
         if extension == CatalogueFileFormat.MAT.value:
             self._read_mat(filepath)
         return self.df
+
+    def _read_bin(self, filepath: Path) -> None:
+        """Read the record catalogue from binary file.
+
+        Args:
+            filepath (Path): Path to the catalogue file.
+
+        Returns:
+            None
+        """
+        self.df = pl.DataFrame.deserialize(filepath, format="binary")
+
+    def _read_csv(self, filepath: Path) -> None:
+        """Read the record catalogue from CSV file.
+
+        Args:
+            filepath (Path): Path to the catalogue file.
+
+        Returns:
+            None
+        """
+
+        def _str_to_list(s: str, dtype=float) -> list:
+            if s == "nan":
+                return []
+            return [dtype(i) for i in s.split(",") if i]
+
+        self.df = pl.read_csv(filepath).with_columns(
+            pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)),
+            pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)),
+            pl.col("gain").map_elements(
+                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+            ),
+            pl.col("sensitivity").map_elements(
+                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+            ),
+        )
+
+    def _read_json(self, filepath: Path) -> None:
+        """Read the record catalogue from JSON file.
+
+        Args:
+            filepath (Path): Path to the catalogue file.
+
+        Returns:
+            None
+        """
+        self.df = pl.read_json(filepath)
+
+    def _read_mat(self, filepath: Path) -> None:
+        """Read the record catalogue from MAT file.
+
+        Args:
+            filepath (Path): Path to the catalogue file.
+
+        Returns:
+            None
+        """
+        mdict = scipy.io.loadmat(filepath)
+        self.records = self._mdict_to_records(mdict)
+        self.df = self._records_to_df()
 
     def _records_to_df(self) -> pl.DataFrame:
         """Convert records to Polars DataFrame.
@@ -155,7 +224,52 @@ class Catalog:
             .sort(by="timestamp")
             .with_row_count()
         )
-    
+
+    def _mdict_to_records(self, mdict: dict) -> list[DataRecord]:
+        """Convert MAT file dictionary to records.
+
+        Args:
+            mdict (dict): MAT file dictionary.
+
+        Returns:
+            list[Record]: List of records.
+        """
+        [mdict.pop(k, None) for k in MAT_KEYS]
+        cat_name = list(mdict.keys()).pop()
+        cat_data = mdict[cat_name]
+
+        filenames = cat_data["filenames"][0][0].astype(str).tolist()
+        timestamp_data = cat_data["timestamps"][0][0].transpose(2, 1, 0)
+        timestamp_orig_data = cat_data["timestamps_orig"][0][0].transpose(2, 1, 0)
+        rhfs_orig = float(cat_data["rhfs_orig"][0][0].squeeze())
+        rhfs = float(cat_data["rhfs"][0][0].squeeze())
+        fixed_gain = cat_data["gain"][0][0].squeeze().astype(float).tolist()
+        hydrophone_sensitivity = (
+            cat_data["sensitivity"][0][0].squeeze().astype(float).tolist()
+        )
+
+        records = []
+        for i, f in enumerate(filenames):
+            n_records = cat_data["timestamps"][0][0].transpose(2, 1, 0).shape[1]
+            for j in range(n_records):
+                records.append(
+                    DataRecord(
+                        filename=Path(f),
+                        record_number=j,
+                        file_format=factory.validate_file_format(Path(f).suffix),
+                        timestamp=convert_yydfrac_to_timestamp(*timestamp_data[i][j]),
+                        timestamp_orig=convert_yydfrac_to_timestamp(
+                            *timestamp_orig_data[i][j]
+                        ),
+                        sampling_rate=rhfs,
+                        sampling_rate_orig=rhfs_orig,
+                        gain=fixed_gain,
+                        sensitivity=hydrophone_sensitivity,
+                    )
+                )
+
+        return records
+
     def _records_to_dfdict(self) -> dict:
         """Convert records to dictionary.
 
@@ -178,11 +292,9 @@ class Catalog:
                 record.sampling_rate_orig for record in self.records
             ],
             "gain": [record.gain for record in self.records],
-            "sensitivity": [
-                record.sensitivity for record in self.records
-            ],
+            "sensitivity": [record.sensitivity for record in self.records],
         }
-    
+
     def _records_to_mdict(self) -> dict:
         """Convert records to dictionary.
 
@@ -215,9 +327,8 @@ class Catalog:
                 .to_numpy()
                 .astype("datetime64[us]")
             )
-
         return {
-            self.records[0].file_format.name: {
+            self.records[0].file_format: {
                 "filenames": filenames,
                 "timestamps": to_ydarray(timestamps),
                 "timestamps_orig": to_ydarray(timestamps_orig),
@@ -227,8 +338,8 @@ class Catalog:
                 "sensitivity": self.records[0].sensitivity,
             }
         }
-    
-    def save(self, savepath: Path, fmt: str | list[str] = "csv"):
+
+    def save(self, path: Path | str):
         """Save the catalogue to file.
 
         Args:
@@ -238,19 +349,34 @@ class Catalog:
         Raises:
             ValueError: If file format is not recognized.
         """
-        if isinstance(fmt, str):
-            fmt = [fmt]
-        if not all(f in CatalogueFileFormat for f in fmt):
-            raise ValueError(f"File format {fmt} is not recognized.")
+        savepath = Path(path)
+        extension = savepath.suffix[1:].lower()
+        if extension is None:
+            extension = "csv"
+        if extension not in CatalogueFileFormat:
+            raise ValueError(f"File format '{extension}' is not recognized.")
 
         savepath.parent.mkdir(parents=True, exist_ok=True)
 
-        if CatalogueFileFormat.CSV.name.lower() in fmt:
+        if extension == CatalogueFileFormat.BIN.name.lower():
+            self.write_binary(savepath.parent / (savepath.stem + ".bin"))
+        if extension == CatalogueFileFormat.CSV.name.lower():
             self.write_csv(savepath.parent / (savepath.stem + ".csv"))
-        if CatalogueFileFormat.JSON.name.lower() in fmt:
+        if extension == CatalogueFileFormat.JSON.name.lower():
             self.write_json(savepath.parent / (savepath.stem + ".json"))
-        if CatalogueFileFormat.MAT.name.lower() in fmt:
+        if extension == CatalogueFileFormat.MAT.name.lower():
             self.write_mat(savepath.parent / (savepath.stem + ".mat"))
+
+    def write_binary(self, savepath: Path):
+        """Write the catalogue to binary file.
+
+        Args:
+            savepath (Path): Path to save the catalogue file.
+
+        Returns:
+            None
+        """
+        self.df.serialize(savepath, format="binary")
 
     def write_csv(self, savepath: Path):
         """Write the catalogue to CSV file.
@@ -273,7 +399,7 @@ class Catalog:
         Returns:
             None
         """
-        self.df.write_json(savepath, pretty=True)
+        self.df.serialize(savepath, format="json")
 
     def write_mat(self, savepath: Path):
         """Write the catalogue to MAT file.
