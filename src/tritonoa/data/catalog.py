@@ -283,6 +283,7 @@ class Catalog:
             "record_number": [record.record_number for record in self.records],
             "file_format": [record.file_format for record in self.records],
             "npts": [record.npts for record in self.records],
+            "nch": [record.nch for record in self.records],
             "timestamp": [record.timestamp.astype("int64") for record in self.records],
             "timestamp_orig": [
                 record.timestamp_orig.astype("int64") for record in self.records
