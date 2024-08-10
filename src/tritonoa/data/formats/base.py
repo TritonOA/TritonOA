@@ -60,6 +60,9 @@ class BaseReader(ABC):
     @abstractmethod
     def read_headers() -> None: ...
 
+    @abstractmethod
+    def read_raw_data() -> None: ...
+
 
 class BaseRecordFormatter(ABC):
     @abstractmethod
