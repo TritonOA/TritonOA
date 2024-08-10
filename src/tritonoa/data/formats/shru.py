@@ -157,7 +157,7 @@ class SHRUReader(base.BaseReader):
     def read(
         self,
         file_path: Path,
-        # records: Optional[int | list[int]] = None,
+        records: Optional[int | list[int]] = None,
         channels: Optional[int | list[int]] = None,
         clock: ClockParameters = ClockParameters(),
         conditioner: SignalParams = SignalParams(),
@@ -167,9 +167,9 @@ class SHRUReader(base.BaseReader):
             channels = [channels]
 
         # Read data and headers
-        raw_data, header = self._read_binary_file(
+        raw_data, header = self.read_raw_data(
             file_path,
-            # records=records,
+            records=records,
             channels=channels,
         )
 
@@ -197,7 +197,7 @@ class SHRUReader(base.BaseReader):
             data=data,
         )
 
-    def _read_binary_file(
+    def read_raw_data(
         self,
         file_path: Path,
         records: Optional[int | list[int]] = None,
