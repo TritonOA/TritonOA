@@ -25,20 +25,6 @@ from tritonoa.data.util import create_empty_data_chunk, round_away
 
 locale.setlocale(locale.LC_ALL, "")
 
-MAX_BUFFER = int(2e9)
-
-
-class BufferExceededWarning(Warning):
-    pass
-
-
-class DataDiscontinuityWarning(Warning):
-    pass
-
-
-class NoDataError(Exception):
-    pass
-
 
 class NoDataWarning(Warning):
     pass
