@@ -11,11 +11,11 @@ from math import ceil, floor
 import os
 from pathlib import Path
 from struct import unpack
-from typing import Optional, Union
+from typing import BinaryIO, Optional
 
 import numpy as np
 from scipy.io import savemat, wavfile
-# from datautils.data import DataFormat, DataStream
+
 
 log = logging.getLogger(__name__)
 
@@ -28,49 +28,237 @@ class SIOReadWarning(Warning):
     pass
 
 
-class SIOReader: ...
-
-
 def read_sio_headers(): ...
 
 
-# @dataclass
-# class SIOHeader:
-#     ID: Optional[int] = None
-#     Nr: Optional[int] = None
-#     BpR: Optional[int] = None
-#     Nc: Optional[int] = None
-#     BpS: Optional[int] = None
-#     tfReal: Optional[int] = None
-#     SpC: Optional[int] = None
-#     bs: Optional[int] = None
-#     fname: Optional[str] = None
-#     comment: Optional[str] = None
+@dataclass
+class SIOHeader:
+    ID: Optional[int] = None
+    Nr: Optional[int] = None
+    BpR: Optional[int] = None
+    Nc: Optional[int] = None
+    BpS: Optional[int] = None
+    tfReal: Optional[int] = None
+    SpC: Optional[int] = None
+    bs: Optional[int] = None
+    fname: Optional[str] = None
+    comment: Optional[str] = None
+    dtype: Optional[str] = None
 
-#     @property
-#     def __description(self) -> str:
-#         return """
-#             ID = ID Number
-#             Nr = # of Records in File
-#             BpR = # of Bytes per Record
-#             Nc = # of channels in File
-#             BpS = # of Bytes per Sample
-#             tfReal = 0 - integer, 1 - real
-#             SpC = # of Samples per Channel
-#             fname = File name
-#             comment = Comment String
-#             bs = Endian check value, should be 32677
-#             """
+    @property
+    def _description(self) -> str:
+        return """
+            ID = ID Number
+            Nr = # of Records in File
+            BpR = # of Bytes per Record
+            Nc = # of channels in File
+            BpS = # of Bytes per Sample
+            tfReal = 0 - integer, 1 - real
+            SpC = # of Samples per Channel
+            fname = File name
+            comment = Comment String
+            bs = Endian check value, should be 32677
+            """
 
-#     @property
-#     def RpC(self) -> int:
-#         """Records per channel."""
-#         return ceil(self.Nr / self.Nc)
+    @property
+    def records_per_channel(self) -> int:
+        """Records per channel."""
+        return ceil(self.Nr / self.Nc)
 
-#     @property
-#     def SpR(self) -> int:
-#         """Samples per record."""
-#         return int(self.BpR / self.BpS)
+    @property
+    def samples_per_record(self) -> int:
+        """Samples per record."""
+        return int(self.BpR / self.BpS)
+
+
+class SIOReader:
+
+    def _endian_check(f: BinaryIO) -> str:
+        f.seek(28)
+        for endian in [">", "<"]:
+            bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
+            if bs == 32677:
+                return endian
+
+        raise SIOReadError(f"Problem with byte swap constant: {bs}")
+
+    def read_headers(self, filename: Path) -> list[SIOHeader]:
+        """Read data record header from an SIO file.
+
+        SIO files contain only one header per file; however, to maintain
+        consistency with the API, this method returns a list containing
+        the header.
+
+        Args:
+            filename (Path): File to read.
+
+        Returns:
+            list[SIOHeader]: Data record headers.
+        """
+        with open(filename, "rb") as f:
+            return [self._read_header(f)]
+
+    def _read_header(self, f: BinaryIO) -> SIOHeader:
+        endian = self._endian_check(f)
+        f.seek(0)
+        ID = int(unpack(endian + "I", f.read(4))[0])  # ID Number
+        Nr = int(unpack(endian + "I", f.read(4))[0])  # # of Records in File
+        BpR = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Record
+        Nc = int(unpack(endian + "I", f.read(4))[0])  # # of channels in File
+        BpS = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Sample
+        if BpS == 2:
+            dtype = "h"
+        else:
+            dtype = "f"
+        tfReal = unpack(endian + "I", f.read(4))[0]  # 0 = integer, 1 = real
+        SpC = unpack(endian + "I", f.read(4))[0]  # # of Samples per Channel
+        bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
+        fname = unpack("24s", f.read(24))[0].decode()  # File name
+        comment = unpack("72s", f.read(72))[0].decode()  # Comment String
+
+        # Header object, for output
+        return SIOHeader(
+            ID=ID,
+            Nr=Nr,
+            BpR=BpR,
+            Nc=Nc,
+            BpS=BpS,
+            tfReal=tfReal,
+            SpC=SpC,
+            bs=bs,
+            fname=fname,
+            comment=comment,
+            dtype=dtype,
+        )
+
+
+    def _validate_channels(channels: list[int], Nc: int) -> list[int]:
+        if len(channels) == 0:
+            channels = list(range(Nc))  # 	fetch all channels
+        if len([x for x in channels if (x < 0) or (x > (Nc - 1))]) != 0:
+            raise SIOReadError(
+                "Channel #s must be within range 0 to " + str(Nc - 1)
+            )
+        return channels
+
+    def read_raw_data(
+        self,
+        file_path: Path,
+        s_start: int = 1,
+        Ns: int = -1,
+        channels: list[int] = [],
+        inMem: bool = True,
+    ) -> tuple[np.ndarray, dict]:
+        """Translation of Jit Sarkar's sioread.m to Python (which was a
+        modification of Aaron Thode's with contributions from Geoff Edelman,
+        James Murray, and Dave Ensberg).
+        Translated by Hunter Akins, 4 June 2019
+        Modified by William Jenkins, 6 April 2022
+
+        Parameters
+        ----------
+        fname : str
+            Name/path to .sio data file to be read.
+        s_start : int, default=1
+            Sample number from which to begin reading. Must be an integer
+            multiple of the record number. To get the record number you can
+            run the script with s_start = 1 and then check the header for
+            the info.
+        Ns : int, default=-1
+            Total samples to read
+        channels : list (int), default=[]
+            Which channels to read (default all) (indexes at 0).
+            Channel -1 returns header only, X is empty.=
+        inMem : bool, default=True
+            Perform data parsing in ram (default true).
+            False: Disk intensive, memory efficient. Blocks read
+            sequentially, keeping only requested channels. Not yet
+            implemented
+            True: Disk efficient, memory intensive. All blocks read at once,
+            requested channels are selected afterwards.
+
+        Returns
+        -------
+        X : array (Ns, Nc)
+            Data output matrix.
+        header : dict
+            Descriptors found in file header.
+        """
+
+        header = self._read_header(file_path)[0]
+
+        samples_per_record = header.samples_per_record
+        samples_per_channel = header.SpC
+        num_channels = header.Nc
+
+        # If either channel or # of samples is 0, then return just header
+        if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
+            X = []
+            return X, header
+
+        # Recheck parameters against header info
+        Ns_max = samples_per_channel - s_start + 1
+        if Ns == -1:
+            Ns = Ns_max  # 	fetch all samples from start point
+        if Ns > Ns_max:
+            SIOReadWarning(
+                f"More samples requested than present in data file. Returning max num samples: {Ns_max}"
+            )
+            Ns = Ns_max
+
+        # Check validity of channel list
+        channels = self._validate_channels(channels, num_channels)
+
+        ## Read in file according to specified method
+        # Calculate file offsets
+        # Header is size of 1 Record at beginning of file
+        r_hoffset = 1
+        # Starting and total records needed from file
+        r_start = int(floor((s_start - 1) / samples_per_record) * num_channels + r_hoffset)
+        r_total = int(ceil(Ns / samples_per_record) * num_channels)
+
+        # Aggregate loading
+        if inMem:
+            # Move to starting location
+            f.seek(r_start * BpR)
+
+            # Read in all records into single column
+            if dtype == "f":
+                Data = unpack(endian + "f" * r_total * samples_per_record, f.read(r_total * samples_per_record * 4))
+            else:
+                Data = unpack(endian + "h" * r_total * samples_per_record, f.read(r_total * samples_per_record * 2))
+            count = len(Data)
+            Data = np.array(Data)  # cast to numpy array
+            if count != r_total * samples_per_record:
+                raise SIOReadError("Not enough samples read from file")
+
+            # Reshape data into a matrix of records
+            Data = np.reshape(Data, (r_total, samples_per_record)).T
+
+            # 	Select each requested channel and stack associated records
+            m = int(r_total / num_channels * samples_per_record)
+            n = len(channels)
+            X = np.zeros((m, n))
+            for i in range(len(channels)):
+                chan = channels[i]
+                blocks = np.arange(chan, r_total, num_channels, dtype="int")
+                tmp = Data[:, blocks]
+                X[:, i] = tmp.T.reshape(m, 1)[:, 0]
+
+            # Trim unneeded samples from start and end of matrix
+            trim_start = int((s_start - 1) % samples_per_record)
+            if trim_start != 0:
+                X = X[trim_start:, :]
+            [m, tmp] = np.shape(X)
+            if m > Ns:
+                X = X[: int(Ns), :]
+            if m < Ns:
+                raise SIOReadError(
+                    f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
+                )
+
+    return X, header
+
 
 
 # class SIODataHandler:
@@ -268,169 +456,171 @@ def read_sio_headers(): ...
 #         _save_wav()
 
 
-# def sioread(
-#     fname: Union[str, bytes, os.PathLike],
-#     s_start: int = 1,
-#     Ns: int = -1,
-#     channels: list[int] = [],
-#     inMem: bool = True,
-# ) -> tuple[np.ndarray, dict]:
-#     """Translation of Jit Sarkar's sioread.m to Python (which was a
-#     modification of Aaron Thode's with contributions from Geoff Edelman,
-#     James Murray, and Dave Ensberg).
-#     Translated by Hunter Akins, 4 June 2019
-#     Modified by William Jenkins, 6 April 2022
+def sioread(
+    fname: str | bytes | os.PathLike,
+    s_start: int = 1,
+    Ns: int = -1,
+    channels: list[int] = [],
+    inMem: bool = True,
+) -> tuple[np.ndarray, dict]:
+    """Translation of Jit Sarkar's sioread.m to Python (which was a
+    modification of Aaron Thode's with contributions from Geoff Edelman,
+    James Murray, and Dave Ensberg).
+    Translated by Hunter Akins, 4 June 2019
+    Modified by William Jenkins, 6 April 2022
 
-#     Parameters
-#     ----------
-#     fname : str
-#         Name/path to .sio data file to be read.
-#     s_start : int, default=1
-#         Sample number from which to begin reading. Must be an integer
-#         multiple of the record number. To get the record number you can
-#         run the script with s_start = 1 and then check the header for
-#         the info.
-#     Ns : int, default=-1
-#         Total samples to read
-#     channels : list (int), default=[]
-#         Which channels to read (default all) (indexes at 0).
-#         Channel -1 returns header only, X is empty.=
-#     inMem : bool, default=True
-#         Perform data parsing in ram (default true).
-#         False: Disk intensive, memory efficient. Blocks read
-#         sequentially, keeping only requested channels. Not yet
-#         implemented
-#         True: Disk efficient, memory intensive. All blocks read at once,
-#         requested channels are selected afterwards.
+    Parameters
+    ----------
+    fname : str
+        Name/path to .sio data file to be read.
+    s_start : int, default=1
+        Sample number from which to begin reading. Must be an integer
+        multiple of the record number. To get the record number you can
+        run the script with s_start = 1 and then check the header for
+        the info.
+    Ns : int, default=-1
+        Total samples to read
+    channels : list (int), default=[]
+        Which channels to read (default all) (indexes at 0).
+        Channel -1 returns header only, X is empty.=
+    inMem : bool, default=True
+        Perform data parsing in ram (default true).
+        False: Disk intensive, memory efficient. Blocks read
+        sequentially, keeping only requested channels. Not yet
+        implemented
+        True: Disk efficient, memory intensive. All blocks read at once,
+        requested channels are selected afterwards.
 
-#     Returns
-#     -------
-#     X : array (Ns, Nc)
-#         Data output matrix.
-#     header : dict
-#         Descriptors found in file header.
-#     """
+    Returns
+    -------
+    X : array (Ns, Nc)
+        Data output matrix.
+    header : dict
+        Descriptors found in file header.
+    """
 
-#     def endian_check(f: os.PathLike) -> str:
-#         endian = ">"
-#         f.seek(28)
-#         bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
-#         if bs != 32677:
-#             endian = "<"
-#             f.seek(28)
-#             bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
-#             if bs != 32677:
-#                 raise SIOReadError("Problem with byte swap constant:" + str(bs))
-#         return endian
+    def endian_check(f: os.PathLike) -> str:
+        endian = ">"
+        f.seek(28)
+        bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
+        if bs != 32677:
+            endian = "<"
+            f.seek(28)
+            bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
+            if bs != 32677:
+                raise SIOReadError("Problem with byte swap constant:" + str(bs))
+        return endian
 
-#     def validate_channels(channels: list[int], Nc: int) -> list[int]:
-#         if len(channels) == 0:
-#             channels = list(range(Nc))  # 	fetch all channels
-#         if len([x for x in channels if (x < 0) or (x > (Nc - 1))]) != 0:
-#             raise SIOReadError("Channel #s must be within range 0 to " + str(Nc - 1))
-#         return channels
+    with open(fname, "rb") as f:
+        endian = endian_check(f)
+        f.seek(0)
+        ID = int(unpack(endian + "I", f.read(4))[0])  # ID Number
+        Nr = int(unpack(endian + "I", f.read(4))[0])  # # of Records in File
+        BpR = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Record
+        Nc = int(unpack(endian + "I", f.read(4))[0])  # # of channels in File
+        BpS = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Sample
+        if BpS == 2:
+            dtype = "h"
+        else:
+            dtype = "f"
+        tfReal = unpack(endian + "I", f.read(4))[0]  # 0 = integer, 1 = real
+        SpC = unpack(endian + "I", f.read(4))[0]  # # of Samples per Channel
+        bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
+        fname = unpack("24s", f.read(24))[0].decode()  # File name
+        comment = unpack("72s", f.read(72))[0].decode()  # Comment String
 
-#     with open(fname, "rb") as f:
-#         endian = endian_check(f)
-#         f.seek(0)
-#         ID = int(unpack(endian + "I", f.read(4))[0])  # ID Number
-#         Nr = int(unpack(endian + "I", f.read(4))[0])  # # of Records in File
-#         BpR = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Record
-#         Nc = int(unpack(endian + "I", f.read(4))[0])  # # of channels in File
-#         BpS = int(unpack(endian + "I", f.read(4))[0])  # # of Bytes per Sample
-#         if BpS == 2:
-#             dtype = "h"
-#         else:
-#             dtype = "f"
-#         tfReal = unpack(endian + "I", f.read(4))[0]  # 0 = integer, 1 = real
-#         SpC = unpack(endian + "I", f.read(4))[0]  # # of Samples per Channel
-#         bs = unpack(endian + "I", f.read(4))[0]  # should be 32677
-#         fname = unpack("24s", f.read(24))[0].decode()  # File name
-#         comment = unpack("72s", f.read(72))[0].decode()  # Comment String
+        # Header object, for output
+        header = SIOHeader(
+            ID=ID,
+            Nr=Nr,
+            BpR=BpR,
+            Nc=Nc,
+            BpS=BpS,
+            tfReal=tfReal,
+            SpC=SpC,
+            bs=bs,
+            fname=fname,
+            comment=comment,
+        )
 
-#         # Header object, for output
-#         header = SIOHeader(
-#             ID=ID,
-#             Nr=Nr,
-#             BpR=BpR,
-#             Nc=Nc,
-#             BpS=BpS,
-#             tfReal=tfReal,
-#             SpC=SpC,
-#             bs=bs,
-#             fname=fname,
-#             comment=comment,
-#         )
+        def validate_channels(channels: list[int], Nc: int) -> list[int]:
+            if len(channels) == 0:
+                channels = list(range(Nc))  # 	fetch all channels
+            if len([x for x in channels if (x < 0) or (x > (Nc - 1))]) != 0:
+                raise SIOReadError(
+                    "Channel #s must be within range 0 to " + str(Nc - 1)
+                )
+            return channels
 
-#         SpR = header.SpR
+        SpR = header.SpR
 
-#         # If either channel or # of samples is 0, then return just header
-#         if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
-#             X = []
-#             return X, header
+        # If either channel or # of samples is 0, then return just header
+        if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
+            X = []
+            return X, header
 
-#         # Recheck parameters against header info
-#         Ns_max = SpC - s_start + 1
-#         if Ns == -1:
-#             Ns = Ns_max  # 	fetch all samples from start point
-#         if Ns > Ns_max:
-#             SIOReadWarning(
-#                 f"More samples requested than present in data file. Returning max num samples: {Ns_max}"
-#             )
-#             Ns = Ns_max
+        # Recheck parameters against header info
+        Ns_max = SpC - s_start + 1
+        if Ns == -1:
+            Ns = Ns_max  # 	fetch all samples from start point
+        if Ns > Ns_max:
+            SIOReadWarning(
+                f"More samples requested than present in data file. Returning max num samples: {Ns_max}"
+            )
+            Ns = Ns_max
 
-#         # Check validity of channel list
-#         channels = validate_channels(channels, Nc)
+        # Check validity of channel list
+        channels = validate_channels(channels, Nc)
 
-#         ## Read in file according to specified method
-#         # Calculate file offsets
-#         # Header is size of 1 Record at beginning of file
-#         r_hoffset = 1
-#         # Starting and total records needed from file
-#         r_start = int(floor((s_start - 1) / SpR) * Nc + r_hoffset)
-#         r_total = int(ceil(Ns / SpR) * Nc)
+        ## Read in file according to specified method
+        # Calculate file offsets
+        # Header is size of 1 Record at beginning of file
+        r_hoffset = 1
+        # Starting and total records needed from file
+        r_start = int(floor((s_start - 1) / SpR) * Nc + r_hoffset)
+        r_total = int(ceil(Ns / SpR) * Nc)
 
-#         # Aggregate loading
-#         if inMem:
-#             # Move to starting location
-#             f.seek(r_start * BpR)
+        # Aggregate loading
+        if inMem:
+            # Move to starting location
+            f.seek(r_start * BpR)
 
-#             # Read in all records into single column
-#             if dtype == "f":
-#                 Data = unpack(endian + "f" * r_total * SpR, f.read(r_total * SpR * 4))
-#             else:
-#                 Data = unpack(endian + "h" * r_total * SpR, f.read(r_total * SpR * 2))
-#             count = len(Data)
-#             Data = np.array(Data)  # cast to numpy array
-#             if count != r_total * SpR:
-#                 raise SIOReadError("Not enough samples read from file")
+            # Read in all records into single column
+            if dtype == "f":
+                Data = unpack(endian + "f" * r_total * SpR, f.read(r_total * SpR * 4))
+            else:
+                Data = unpack(endian + "h" * r_total * SpR, f.read(r_total * SpR * 2))
+            count = len(Data)
+            Data = np.array(Data)  # cast to numpy array
+            if count != r_total * SpR:
+                raise SIOReadError("Not enough samples read from file")
 
-#             # Reshape data into a matrix of records
-#             Data = np.reshape(Data, (r_total, SpR)).T
+            # Reshape data into a matrix of records
+            Data = np.reshape(Data, (r_total, SpR)).T
 
-#             # 	Select each requested channel and stack associated records
-#             m = int(r_total / Nc * SpR)
-#             n = len(channels)
-#             X = np.zeros((m, n))
-#             for i in range(len(channels)):
-#                 chan = channels[i]
-#                 blocks = np.arange(chan, r_total, Nc, dtype="int")
-#                 tmp = Data[:, blocks]
-#                 X[:, i] = tmp.T.reshape(m, 1)[:, 0]
+            # 	Select each requested channel and stack associated records
+            m = int(r_total / Nc * SpR)
+            n = len(channels)
+            X = np.zeros((m, n))
+            for i in range(len(channels)):
+                chan = channels[i]
+                blocks = np.arange(chan, r_total, Nc, dtype="int")
+                tmp = Data[:, blocks]
+                X[:, i] = tmp.T.reshape(m, 1)[:, 0]
 
-#             # Trim unneeded samples from start and end of matrix
-#             trim_start = int((s_start - 1) % SpR)
-#             if trim_start != 0:
-#                 X = X[trim_start:, :]
-#             [m, tmp] = np.shape(X)
-#             if m > Ns:
-#                 X = X[: int(Ns), :]
-#             if m < Ns:
-#                 raise SIOReadError(
-#                     f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {SpR}"
-#                 )
+            # Trim unneeded samples from start and end of matrix
+            trim_start = int((s_start - 1) % SpR)
+            if trim_start != 0:
+                X = X[trim_start:, :]
+            [m, tmp] = np.shape(X)
+            if m > Ns:
+                X = X[: int(Ns), :]
+            if m < Ns:
+                raise SIOReadError(
+                    f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {SpR}"
+                )
 
-#     return X, header
+    return X, header
 
 
 # def create_time_vector(num_samples: int, fs: float) -> np.ndarray:
