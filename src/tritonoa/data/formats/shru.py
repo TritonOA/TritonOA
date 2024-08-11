@@ -163,8 +163,7 @@ class SHRUReader(base.BaseReader):
         conditioner: SignalParams = SignalParams(),
     ) -> DataStream:
 
-        if isinstance(channels, int):
-            channels = [channels]
+        channels = [channels] if isinstance(channels, int) else channels
 
         # Read data and headers
         raw_data, header = self.read_raw_data(
@@ -228,15 +227,7 @@ class SHRUReader(base.BaseReader):
             records = [records]
 
         nch = self.get_num_channels(headers)
-        if channels is None:
-            channels = list(range(nch))
-        elif not isinstance(channels, list):
-            channels = [channels]
-
-        if any((i > nch - 1) for i in channels):
-            raise ValueError(
-                f"Channel {len(channels)} requested but only got {nch} from header."
-            )
+        channels = base.validate_channels(nch, channels=channels)
 
         header1 = headers[records[0]]
 
@@ -545,11 +536,11 @@ class SHRUReader(base.BaseReader):
         return self._convert_24bit_to_int(data_bytes, nch, spts)
 
     @staticmethod
-    def get_num_channels(drhs: list[SHRUHeader]) -> int:
-        for record in drhs:
-            if record.ch != drhs[0].ch:
+    def get_num_channels(headers: list[SHRUHeader]) -> int:
+        for record in headers:
+            if record.ch != headers[0].ch:
                 warnings.warn("Number of channels varies across records.")
-        return drhs[0].ch
+        return headers[0].ch
 
 
 class SHRURecordFormatter(base.BaseRecordFormatter):
