@@ -11,6 +11,10 @@ import numpy as np
 import polars as pl
 
 
+class ChannelMismatchError(Exception):
+    pass
+
+
 @dataclass
 class DataRecord:
     """Data record object.
@@ -70,3 +74,27 @@ class BaseRecordFormatter(ABC):
 
     @abstractmethod
     def format_record(self, **kwargs) -> None: ...
+
+
+def validate_channels(
+    nch: int, channels: Optional[int | list[int]] = None
+) -> list[int]:
+    if channels is None:
+        return list(range(nch))
+
+    channels = [channels] if not isinstance(channels, list) else channels
+    if any((i > nch - 1) for i in channels):
+        raise ChannelMismatchError(
+            f"Channel {len(channels)} requested but only got {nch} from header."
+        )
+    return channels
+
+
+# def _validate_channels(channels: list[int], num_channels: int) -> list[int]:
+#     if len(channels) == 0:
+#         channels = list(range(num_channels))  # 	fetch all channels
+#     if len([x for x in channels if (x < 0) or (x > (num_channels - 1))]) != 0:
+#         raise SIOReadError(
+#             "Channel #s must be within range 0 to " + str(num_channels - 1)
+#         )
+#     return channels
