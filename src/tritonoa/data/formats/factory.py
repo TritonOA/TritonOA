@@ -3,6 +3,7 @@
 from typing import Optional
 
 from tritonoa.data.formats.shru import SHRUReader, SHRURecordFormatter, SHRUFileFormat
+from tritonoa.data.formats.sio import SIOReader, SIOFileFormat
 
 
 def get_file_format(
@@ -14,8 +15,6 @@ def get_file_format(
         file_format = validate_file_format(file_format)
     if file_format is None:
         file_format = validate_file_format(suffix)
-    if suffix is not None and validate_file_format(suffix) != file_format:
-        raise ValueError("The provided 'suffix' and 'file_format' are not consistent.")
     return file_format
 
 
@@ -46,6 +45,8 @@ def get_reader(
     file_format = get_file_format(suffix, file_format)
     if file_format == SHRUFileFormat.FORMAT.value:
         return SHRUReader()
+    if file_format == SIOFileFormat.FORMAT.value:
+        return SIOReader()
     raise ValueError(f"File format {file_format} is not recognized.")
 
 
@@ -53,4 +54,6 @@ def validate_file_format(desc: str) -> str:
     """Get file format from suffix."""
     if SHRUFileFormat.is_format(desc):
         return SHRUFileFormat.FORMAT.value
+    if SIOFileFormat.is_format(desc):
+        return SIOFileFormat.FORMAT.value
     raise ValueError(f"File format cannot be inferred from file extension '{desc}'.")
