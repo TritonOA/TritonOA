@@ -3,12 +3,15 @@
 # TODO: Place acknowledgement/license for SIOREAD here.
 
 from dataclasses import dataclass
+from enum import Enum
 from math import ceil, floor
 from pathlib import Path
 import struct
 from typing import BinaryIO, Optional
 
 import numpy as np
+
+from tritonoa.data.formats import base
 
 
 class SIOReadError(Exception):
@@ -17,6 +20,16 @@ class SIOReadError(Exception):
 
 class SIOReadWarning(Warning):
     pass
+
+
+class SIODataFormat(Enum):
+    F = "f"
+    H = "h"
+
+
+class SIOFileFormat(base.FileFormatCheckerMixin, Enum):
+    FORMAT = "SIO"
+    D23 = ".SIO"
 
 
 @dataclass
@@ -32,6 +45,11 @@ class SIOHeader:
     fname: Optional[str] = None
     comment: Optional[str] = None
     dtype: Optional[str] = None
+
+    # def __post_init__(self):
+    # TODO: Check that dtype is a member of SIOFormat enum.
+    #     if self.dtype is not None and self.dtype not in SIOFormat:
+    #         raise ValueError("Incorrect format.")
 
     @property
     def _description(self) -> str:
@@ -61,13 +79,16 @@ class SIOHeader:
 
 class SIOReader:
 
+    def read(self, filename: Path):
+        return self.read_raw_data(filename)
+
+    @staticmethod
     def _endian_check(f: BinaryIO) -> str:
-        f.seek(28)
         for endian in [">", "<"]:
-            bs = struct.struct.unpack(endian + "I", f.read(4))[0]  # should be 32677
+            f.seek(28)
+            bs = struct.unpack(endian + "I", f.read(4))[0]  # should be 32677
             if bs == 32677:
                 return endian
-
         raise SIOReadError(f"Problem with byte swap constant: {bs}")
 
     def read_headers(self, filename: Path) -> list[SIOHeader]:
@@ -87,10 +108,10 @@ class SIOReader:
             header, _, _ = self._read_header(filename)
         return [header]
 
-    def _read_header(self, fid: BinaryIO) -> SIOHeader:
+    def _read_header(self, fid: BinaryIO) -> tuple[SIOHeader, str]:
         endian = self._endian_check(fid)
         fid.seek(0)
-        ID = int(struct.struct.unpack(endian + "I", fid.read(4))[0])
+        ID = int(struct.unpack(endian + "I", fid.read(4))[0])
         num_records = int(struct.unpack(endian + "I", fid.read(4))[0])
         bytes_per_record = int(struct.unpack(endian + "I", fid.read(4))[0])
         num_channels = int(struct.unpack(endian + "I", fid.read(4))[0])
@@ -115,10 +136,10 @@ class SIOReader:
                 comment=comment,
                 dtype=dtype,
             ),
-            fid,
             endian,
         )
 
+    @staticmethod
     def _validate_channels(channels: list[int], num_channels: int) -> list[int]:
         if len(channels) == 0:
             channels = list(range(num_channels))  # 	fetch all channels
@@ -131,10 +152,9 @@ class SIOReader:
     def read_raw_data(
         self,
         file_path: Path,
-        s_start: int = 1,
+        s_start: int = 0,
         Ns: int = -1,
         channels: list[int] = [],
-        inMem: bool = True,
     ) -> tuple[np.ndarray, dict]:
         """Translation of Jit Sarkar's sioread.m to Python (which was a
         modification of Aaron Thode's with contributions from Geoff Edelman,
@@ -156,13 +176,6 @@ class SIOReader:
         channels : list (int), default=[]
             Which channels to read (default all) (indexes at 0).
             Channel -1 returns header only, X is empty.=
-        inMem : bool, default=True
-            Perform data parsing in ram (default true).
-            False: Disk intensive, memory efficient. Blocks read
-            sequentially, keeping only requested channels. Not yet
-            implemented
-            True: Disk efficient, memory intensive. All blocks read at onum_channelse,
-            requested channels are selected afterwards.
 
         Returns
         -------
@@ -173,87 +186,82 @@ class SIOReader:
         """
 
         with open(file_path, "rb") as fid:
-            header, fid, endian = self._read_header(file_path)[0]
+            header, endian = self._read_header(fid)
 
-        samples_per_record = header.samples_per_record
-        samples_per_channel = header.samples_per_channel
-        num_channels = header.num_channels
+            samples_per_record = header.samples_per_record
+            samples_per_channel = header.samples_per_channel
+            num_channels = header.num_channels
 
-        # If either channel or # of samples is 0, then return just header
-        if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
-            X = []
-            return X, header
+            # If either channel or # of samples is 0, then return just header
+            if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
+                data = []
+                return data, header
 
-        # Recheck parameters against header info
-        Ns_max = samples_per_channel - s_start + 1
-        if Ns == -1:
-            Ns = Ns_max  # 	fetch all samples from start point
-        if Ns > Ns_max:
-            SIOReadWarning(
-                f"More samples requested than present in data file. Returning max num samples: {Ns_max}"
+            # Recheck parameters against header info
+            Ns_max = samples_per_channel - s_start + 1
+            if Ns == -1:
+                Ns = Ns_max  # 	fetch all samples from start point
+            if Ns > Ns_max:
+                SIOReadWarning(
+                    f"More samples requested than present in data file. Returning max num samples: {Ns_max}"
+                )
+                Ns = Ns_max
+
+            # Check validity of channel list
+            channels = self._validate_channels(channels, num_channels)
+
+            # Calculate file offsets
+            # Header is size of 1 Record at beginning of file
+            r_hoffset = 1
+            # Starting and total records needed from file
+            r_start = int(
+                floor(s_start / samples_per_record) * num_channels + r_hoffset
             )
-            Ns = Ns_max
+            r_total = int(ceil(Ns / samples_per_record) * num_channels)
 
-        # Check validity of channel list
-        channels = self._validate_channels(channels, num_channels)
+            # # Aggregate loading
+            # if inMem:
+            # Move to starting location
+            fid.seek(r_start * header.bytes_per_record)
 
-        ## Read in file according to specified method
-        # Calculate file offsets
-        # Header is size of 1 Record at beginning of file
-        r_hoffset = 1
-        # Starting and total records needed from file
-        r_start = int(
-            floor((s_start - 1) / samples_per_record) * num_channels + r_hoffset
-        )
-        r_total = int(ceil(Ns / samples_per_record) * num_channels)
-
-        # # Aggregate loading
-        # if inMem:
-        # Move to starting location
-        fid.seek(r_start * header.bytes_per_record)
-
-        # Read in all records into single column
-        if header.dtype == "f":
-            Data = struct.unpack(
-                endian + "f" * r_total * samples_per_record,
-                fid.read(r_total * samples_per_record * 4),
+            # Read in all records into single column
+            factor = 4 if header.dtype == "f" else 2
+            raw_data = np.array(
+                struct.unpack(
+                    endian + header.dtype * r_total * samples_per_record,
+                    fid.read(r_total * samples_per_record * factor),
+                )
             )
-        else:
-            Data = struct.unpack(
-                endian + "h" * r_total * samples_per_record,
-                fid.read(r_total * samples_per_record * 2),
-            )
-        count = len(Data)
-        Data = np.array(Data)  # cast to numpy array
-        if count != r_total * samples_per_record:
-            raise SIOReadError("Not enough samples read from file")
+            if len(raw_data) != r_total * samples_per_record:
+                raise SIOReadError("Not enough samples read from file")
 
-        # Reshape data into a matrix of records
-        Data = np.reshape(Data, (r_total, samples_per_record)).T
+            # Reshape data into a matrix of records
+            raw_data = np.reshape(raw_data, (r_total, samples_per_record))
 
-        # 	Select each requested channel and stack associated records
-        m = int(r_total / num_channels * samples_per_record)
-        n = len(channels)
-        X = np.zeros((m, n))
-        for i in range(len(channels)):
-            chan = channels[i]
-            blocks = np.arange(chan, r_total, num_channels, dtype="int")
-            tmp = Data[:, blocks]
-            X[:, i] = tmp.T.reshape(m, 1)[:, 0]
+            # 	Select each requested channel and stack associated records
+            m = len(channels)
+            n = int(r_total / num_channels * samples_per_record)
+            data = np.zeros((m, n))
+            # return
+            for i in range(len(channels)):
+                chan = channels[i]
+                blocks = np.arange(chan, r_total, num_channels, dtype="int")
+                data[i] = raw_data[blocks].T.reshape(n,)
+            
+            # Trim unneeded samples from start and end of matrix
+            trim_start = int(s_start % samples_per_record)
+            if trim_start != 0:
+                data = data[trim_start:, :]
+            if n > Ns:
+                data = data[: int(Ns), :]
+            print(n, Ns)
+            print(data.shape)
+            if n < Ns:
+                raise SIOReadError(
+                    f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
+                )
 
-        # Trim unneeded samples from start and end of matrix
-        trim_start = int((s_start - 1) % samples_per_record)
-        if trim_start != 0:
-            X = X[trim_start:, :]
-        [m, tmp] = np.shape(X)
-        if m > Ns:
-            X = X[: int(Ns), :]
-        if m < Ns:
-            raise SIOReadError(
-                f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
-            )
-
-        return X, header
+            return data, header
 
 
 # class SIODataHandler:
