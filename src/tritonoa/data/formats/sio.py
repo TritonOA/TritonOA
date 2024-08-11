@@ -3,7 +3,6 @@
 # TODO: Place acknowledgement/license for SIOREAD here.
 
 from dataclasses import dataclass
-import logging
 from math import ceil, floor
 from pathlib import Path
 import struct
@@ -88,20 +87,20 @@ class SIOReader:
             header, _, _ = self._read_header(filename)
         return [header]
 
-    def _read_header(self, f: BinaryIO) -> SIOHeader:
-        endian = self._endian_check(f)
-        f.seek(0)
-        ID = int(struct.struct.unpack(endian + "I", f.read(4))[0])
-        num_records = int(struct.unpack(endian + "I", f.read(4))[0])
-        bytes_per_record = int(struct.unpack(endian + "I", f.read(4))[0])
-        num_channels = int(struct.unpack(endian + "I", f.read(4))[0])
-        bytes_per_sample = int(struct.unpack(endian + "I", f.read(4))[0])
+    def _read_header(self, fid: BinaryIO) -> SIOHeader:
+        endian = self._endian_check(fid)
+        fid.seek(0)
+        ID = int(struct.struct.unpack(endian + "I", fid.read(4))[0])
+        num_records = int(struct.unpack(endian + "I", fid.read(4))[0])
+        bytes_per_record = int(struct.unpack(endian + "I", fid.read(4))[0])
+        num_channels = int(struct.unpack(endian + "I", fid.read(4))[0])
+        bytes_per_sample = int(struct.unpack(endian + "I", fid.read(4))[0])
         dtype = "h" if bytes_per_sample == 2 else "f"
-        tfReal = struct.unpack(endian + "I", f.read(4))[0]  # 0 = integer, 1 = real
-        samples_per_channel = struct.unpack(endian + "I", f.read(4))[0]
-        bs = struct.unpack(endian + "I", f.read(4))[0]  # should be 32677
-        fname = struct.unpack("24s", f.read(24))[0].decode()
-        comment = struct.unpack("72s", f.read(72))[0].decode()
+        tfReal = struct.unpack(endian + "I", fid.read(4))[0]  # 0 = integer, 1 = real
+        samples_per_channel = struct.unpack(endian + "I", fid.read(4))[0]
+        bs = struct.unpack(endian + "I", fid.read(4))[0]  # should be 32677
+        fname = struct.unpack("24s", fid.read(24))[0].decode()
+        comment = struct.unpack("72s", fid.read(72))[0].decode()
         return (
             SIOHeader(
                 ID=ID,
@@ -116,7 +115,7 @@ class SIOReader:
                 comment=comment,
                 dtype=dtype,
             ),
-            f,
+            fid,
             endian,
         )
 
@@ -173,8 +172,8 @@ class SIOReader:
             Descriptors found in file header.
         """
 
-        with open(file_path, "rb") as f:
-            header, f, endian = self._read_header(file_path)[0]
+        with open(file_path, "rb") as fid:
+            header, fid, endian = self._read_header(file_path)[0]
 
         samples_per_record = header.samples_per_record
         samples_per_channel = header.samples_per_channel
@@ -211,18 +210,18 @@ class SIOReader:
         # # Aggregate loading
         # if inMem:
         # Move to starting location
-        f.seek(r_start * header.bytes_per_record)
+        fid.seek(r_start * header.bytes_per_record)
 
         # Read in all records into single column
         if header.dtype == "f":
             Data = struct.unpack(
                 endian + "f" * r_total * samples_per_record,
-                f.read(r_total * samples_per_record * 4),
+                fid.read(r_total * samples_per_record * 4),
             )
         else:
             Data = struct.unpack(
                 endian + "h" * r_total * samples_per_record,
-                f.read(r_total * samples_per_record * 2),
+                fid.read(r_total * samples_per_record * 2),
             )
         count = len(Data)
         Data = np.array(Data)  # cast to numpy array
