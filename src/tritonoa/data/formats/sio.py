@@ -12,6 +12,7 @@ from typing import BinaryIO, Optional
 import numpy as np
 
 from tritonoa.data.formats import base
+from tritonoa.data.stream import DataStream, DataStreamStats
 
 
 class SIOReadError(Exception):
@@ -79,8 +80,22 @@ class SIOHeader:
 
 class SIOReader:
 
-    def read(self, filename: Path):
-        return self.read_raw_data(filename)
+    def read(
+        self,
+        filename: Path,
+        channels: Optional[int | list[int]] = None,
+        sampling_rate: Optional[float] = 1.0,
+        units: Optional[str] = "normalized",
+    ):
+        data, header = self.read_raw_data(filename, channels=channels)
+        return DataStream(
+            stats=DataStreamStats(
+                channels=channels,
+                time_init=0.0,
+                sampling_rate=sampling_rate,
+                units=units,
+            )
+        )
 
     @staticmethod
     def _endian_check(f: BinaryIO) -> str:
@@ -120,8 +135,10 @@ class SIOReader:
         tfReal = struct.unpack(endian + "I", fid.read(4))[0]  # 0 = integer, 1 = real
         samples_per_channel = struct.unpack(endian + "I", fid.read(4))[0]
         bs = struct.unpack(endian + "I", fid.read(4))[0]  # should be 32677
-        fname = struct.unpack("24s", fid.read(24))[0].decode()
-        comment = struct.unpack("72s", fid.read(72))[0].decode()
+        fname = struct.unpack("24s", fid.read(24))[0].decode().strip()
+        comment = (
+            struct.unpack("72s", fid.read(72))[0].decode().replace("\x00", "").strip()
+        )
         return (
             SIOHeader(
                 ID=ID,
@@ -139,22 +156,12 @@ class SIOReader:
             endian,
         )
 
-    @staticmethod
-    def _validate_channels(channels: list[int], num_channels: int) -> list[int]:
-        if len(channels) == 0:
-            channels = list(range(num_channels))  # 	fetch all channels
-        if len([x for x in channels if (x < 0) or (x > (num_channels - 1))]) != 0:
-            raise SIOReadError(
-                "Channel #s must be within range 0 to " + str(num_channels - 1)
-            )
-        return channels
-
     def read_raw_data(
         self,
         file_path: Path,
         s_start: int = 0,
+        channels: Optional[int | list[int]] = None,
         Ns: int = -1,
-        channels: list[int] = [],
     ) -> tuple[np.ndarray, dict]:
         """Translation of Jit Sarkar's sioread.m to Python (which was a
         modification of Aaron Thode's with contributions from Geoff Edelman,
@@ -192,6 +199,7 @@ class SIOReader:
             samples_per_channel = header.samples_per_channel
             num_channels = header.num_channels
 
+            channels = base.validate_channels(num_channels, channels=channels)
             # If either channel or # of samples is 0, then return just header
             if (Ns == 0) or ((len(channels) == 1) and (channels[0] == -1)):
                 data = []
@@ -208,7 +216,6 @@ class SIOReader:
                 Ns = Ns_max
 
             # Check validity of channel list
-            channels = self._validate_channels(channels, num_channels)
 
             # Calculate file offsets
             # Header is size of 1 Record at beginning of file
@@ -246,8 +253,10 @@ class SIOReader:
             for i in range(len(channels)):
                 chan = channels[i]
                 blocks = np.arange(chan, r_total, num_channels, dtype="int")
-                data[i] = raw_data[blocks].T.reshape(n,)
-            
+                data[i] = raw_data[blocks].T.reshape(
+                    n,
+                )
+
             # Trim unneeded samples from start and end of matrix
             trim_start = int(s_start % samples_per_record)
             if trim_start != 0:
