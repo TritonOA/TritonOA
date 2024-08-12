@@ -49,7 +49,6 @@ class DataStreamStats:
     units: Optional[str] = None
 
 
-@dataclass
 class DataStream:
     """Contains acoustic data and data statistics.
 
@@ -64,8 +63,12 @@ class DataStream:
         NoDataWarning: If no data is found in the object.
     """
 
-    stats: Optional[DataStreamStats]
-    data: Optional[np.ndarray] = None
+    def __init__(
+        self, stats: Optional[DataStreamStats] = None, data: Optional[np.ndarray] = None
+    ) -> None:
+        self.stats = stats
+        self.data = data
+        self._post_init()
 
     def __getitem__(self, index: int | slice) -> np.ndarray:
         """Returns data and time vector sliced by time index."""
@@ -81,28 +84,21 @@ class DataStream:
         data = self.data[:, index]
         return DataStream(stats=stats, data=data)
 
-    def __post_init__(self):
+    def _post_init(self):
         """Initializes data and time vector."""
+        # TODO: Need to improve this - does not handle edge cases properly.
         # Set time_init to 0 if not provided
         if self.stats.time_init is None:
             self.stats.time_init = np.timedelta64(0, "us")
 
         # Compute sampling rate if time_init and time_end are provided
-        if (
-            self.stats.time_init is not None
-            and self.stats.time_end is not None
-            and self.stats.sampling_rate is None
-        ):
+        if self.stats.time_end is not None and self.stats.sampling_rate is None:
             self.stats.sampling_rate = (
                 self.stats.time_end - self.stats.time_init
             ) / self.num_samples
 
         # Set time_end if time_init and sampling rate are provided
-        if (
-            self.stats.time_init is not None
-            and self.stats.time_end is None
-            and self.stats.sampling_rate is not None
-        ):
+        if self.stats.time_end is None and self.stats.sampling_rate is not None:
             self.stats.time_end = self.stats.time_init + np.timedelta64(
                 int(
                     TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate
