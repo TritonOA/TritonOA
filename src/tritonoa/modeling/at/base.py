@@ -6,7 +6,15 @@ import subprocess
 from typing import Any, Optional
 
 from tritonoa.modeling.env import Environment
+
 # TODO: Implement `Environment` class
+
+AT_EXECUTABLES = {
+    "bellhop": Path("src/bin/at/Bellhop/bellhop.exe"),
+    "kraken": Path("src/bin/at/Kraken/kraken.exe"),
+    "krakenc": Path("src/bin/at/Kraken/krakenc.exe"),
+    "scooter": Path("src/bin/at/Scooter/scooter.exe"),
+}
 
 
 class UnknownCommandError(Exception):
