@@ -182,3 +182,7 @@ tritonoa/at/bin
 !RunBELLHOP.ipynb
 !RunKRAKEN.ipynb
 !RunMFP.ipynb
+
+# Binary & Temp files:
+/src/bin/*
+/src/tmp/*
