@@ -91,10 +91,10 @@ class SIOReader:
         return DataStream(
             stats=DataStreamStats(
                 channels=channels,
-                time_init=0.0,
                 sampling_rate=sampling_rate,
                 units=units,
-            )
+            ),
+            data=data,
         )
 
     @staticmethod
@@ -263,8 +263,6 @@ class SIOReader:
                 data = data[trim_start:, :]
             if n > Ns:
                 data = data[: int(Ns), :]
-            print(n, Ns)
-            print(data.shape)
             if n < Ns:
                 raise SIOReadError(
                     f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
