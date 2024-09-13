@@ -5,21 +5,26 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from tritonoa.at.env.array import Receiver, Source
-from tritonoa.at.env.halfspace import Bottom, Top
-from tritonoa.at.env.ssp import SoundSpeedProfileAT, SSPLayer
-from tritonoa.modeling.env import Environment
-from tritonoa.modeling.at.base import AcousticsToolboxModel
+from tritonoa.modeling.at.base import (
+    AcousticsToolboxModel,
+    SoundSpeedProfileAT,
+    SSPLayer,
+)
+from tritonoa.modeling.environment.array import Receiver, Source
+from tritonoa.modeling.environment.base import Environment
+from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.util import clean_up_files
 
 
 class BellhopModelExtensions(Enum):
+    # TODO: Convert to StringEnum
     ENV = "env"
     PRT = "prt"
     RAY = "ray"
 
 
 class BellhopRunType(Enum):
+    # TODO: Convert to StringEnum
     R = "R"  #  Generates a ray file
     E = "E"  #  Generates an eigenray file
     A = "A"  #  Generates an amplitude-delay file (ascii)
@@ -30,22 +35,26 @@ class BellhopRunType(Enum):
 
 
 class BellhopBeamType(Enum):
+    # TODO: Convert to StringEnum
     G = "G"  #  Geometric hat beams in Cartesian coordinates (default)
     g = "g"  #  Geometric hat beams in ray-centered coordinates
     B = "B"  #  Geometric Gaussian beams
 
 
 class BellhopPatternFileChoice(Enum):
+    # TODO: Convert to StringEnum
     READ = "*"  # read in a source beam pattern file
     DONT_READ = "O"  # don't (default)
 
 
 class BellhopSourceType(Enum):
+    # TODO: Convert to StringEnum
     R = "R"  # point source (cylindrical coordinates) (default)
     X = "X"  # line source (cartesian coordinates)
 
 
 class BellhopGridType(Enum):
+    # TODO: Convert to StringEnum
     R = "R"  # rectilinear grid (default)
     I = "I"  # irregular grid
 
