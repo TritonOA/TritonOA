@@ -9,7 +9,8 @@ from typing import Any, List, Union
 from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.environment.ssp import SSPLayer
 
-
+# TODO This class is only specific to AT; should be moved to the `base` class
+# in the `at` subpackage and be replaced with a more general abstraction.
 @dataclass
 class Environment(ABC):
     title: str
