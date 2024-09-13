@@ -146,7 +146,7 @@ def plot_TL_2d(
 
     ax.invert_yaxis()
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap))
+    cbar = plt.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label(clabel)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
