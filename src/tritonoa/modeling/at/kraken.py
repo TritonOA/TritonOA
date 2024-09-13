@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from struct import unpack
 from typing import Any, Optional
@@ -13,6 +13,11 @@ from tritonoa.modeling.array import Receiver, Source
 from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.physics import range_ind_pressure_from_modes
 from tritonoa.modeling.util import clean_up_files
+
+
+class KrakenModels(StrEnum):
+    KRAKEN = "kraken"
+    KRAKENC = "krakenc"
 
 
 class KrakenModelExtensions(Enum):
@@ -74,12 +79,15 @@ class KrakenModel(AcousticsToolboxModel):
     def run(
         self,
         model_name: str,
-        model_path: Optional[Path] = None,
         fldflag: bool = False,
         keep_files: bool = False,
     ) -> None:
+        
+        if model_name.lower() not in KrakenModels:
+            raise ValueError(f"Model name '{model_name}' is not recognized.") 
+
         _ = self.environment.write_envfil()
-        self.run_model(model_name=model_name, model_path=model_path)
+        self.run_model(model_name=model_name)
         self.modes = Modes(
             self.environment.freq, self.environment.source, self.environment.receiver
         )

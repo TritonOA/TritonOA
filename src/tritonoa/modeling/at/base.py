@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 import secrets
 import subprocess
@@ -13,10 +14,10 @@ from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.environment.ssp import SoundSpeedProfile
 
 AT_EXECUTABLES = {
-    "bellhop": Path("src/bin/at/Bellhop/bellhop.exe"),
-    "kraken": Path("src/bin/at/Kraken/kraken.exe"),
-    "krakenc": Path("src/bin/at/Kraken/krakenc.exe"),
-    "scooter": Path("src/bin/at/Scooter/scooter.exe"),
+    "bellhop": Path("src/lib/at/bin/bellhop.exe"),
+    "kraken": Path("src/lib/at/bin/kraken.exe"),
+    "krakenc": Path("src/lib/at/bin/krakenc.exe"),
+    "scooter": Path("src/lib/at/bin/scooter.exe"),
 }
 
 
@@ -147,14 +148,9 @@ class AcousticsToolboxModel(ABC):
     def run_model(
         self,
         model_name: str,
-        model_path: Optional[Path] = None,
     ) -> int:
-        if model_path is None:
-            command = f"{model_name.lower()}.exe {self.environment.title}"
-        else:
-            command = (
-                f"{str(model_path)}/{model_name.lower()}.exe {self.environment.title}"
-            )
+        executable = self.get_executable(model_name)
+        command = f"{executable} {self.environment.title}"
 
         try:
             return subprocess.run(
@@ -166,5 +162,9 @@ class AcousticsToolboxModel(ABC):
             )
         except:
             raise UnknownCommandError(
-                f"Unknown command: {str(model_path)}/{model_name.lower()}.exe"
+                f"Unknown command: `{command}`"
             )
+
+    @staticmethod
+    def get_executable(model_name: str) -> str:
+        return str(AT_EXECUTABLES.get(model_name.lower()).resolve())

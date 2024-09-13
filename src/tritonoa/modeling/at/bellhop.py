@@ -255,13 +255,12 @@ class BellhopModel(AcousticsToolboxModel):
 
     def run(
         self,
-        model_path: Optional[Path] = None,
         keep_files: bool = False,
     ) -> None:
         """Returns modes, pressure field, rvec, zvec"""
 
         _ = self.environment.write_envfil()
-        self.run_model(model_name=self.model_name, model_path=model_path)
+        self.run_model(model_name=self.model_name)
         self.beams = Beams(self.environment.source, self.environment.receiver)
         self.beams.read_beams(self.environment.tmpdir / self.environment.title)
         if not keep_files:
