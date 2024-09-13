@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # This script downloads and installs the Acoustics Toolbox software.
 
@@ -44,5 +44,6 @@ find . -mindepth 1 \
     -path './bin' -prune -o \
     -path './doc' -prune -o \
     -not -name 'index.html' \
+    -not -name 'LICENSE' \
     -not -name 'Makefile' \
     -exec rm -rf {} +
