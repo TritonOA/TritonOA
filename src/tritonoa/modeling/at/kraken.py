@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from struct import unpack
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 import numpy as np
 
 from tritonoa.modeling.at.base import AcousticsToolboxModel, SoundSpeedProfileAT, SSPLayer
-from tritonoa.modeling.environment.array import Receiver, Source
+from tritonoa.modeling.array import Receiver, Source
 from tritonoa.modeling.environment.base import Environment
 from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.physics import range_ind_pressure_from_modes
@@ -103,7 +103,7 @@ class Modes:
         self.source = source
         self.receiver = receiver
 
-    def read_modes(self, modfil: str, modes: Optional[Union[np.ndarray, list]] = None):
+    def read_modes(self, modfil: str, modes: Optional[np.ndarray | list] = None):
         """Read the modes produced by KRAKEN usage:
         keys are 'fname', 'freq', 'modes'
         'fname' and 'freq' are mandatory, 'modes' is if you only want a
