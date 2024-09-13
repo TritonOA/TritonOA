@@ -303,7 +303,7 @@ class Modes:
                 )  # take the subset that the user specified
 
         self.title = title
-        self.M = M
+        self.num_modes = M
         self.z = np.array(z)
         self.k = modes_k
         self.phi = modes_phi
@@ -432,7 +432,7 @@ def build_kraken_environment(parameters: dict) -> KrakenEnvironment:
     )
 
 
-def run_kraken(parameters: dict, keep_files=False) -> np.ndarray:
+def run_kraken(parameters: dict, keep_files=False) -> KrakenModel:
     """Compute pressure field from range-independent Kraken model.
 
     Args:
@@ -443,14 +443,14 @@ def run_kraken(parameters: dict, keep_files=False) -> np.ndarray:
     """
     environment = build_kraken_environment(parameters)
     # Instantiate & Run Model
-    kmodel = KrakenModel(environment)
-    kmodel.run(
+    model = KrakenModel(environment)
+    model.run(
         model_name=parameters.get("model", "KRAKEN"),
         fldflag=True,
         keep_files=keep_files,
     )
     # Return Complex Pressure at Receiver
-    return kmodel.modes.p
+    return model
 
 
 def run_kraken_adiabatic(parameters: dict, keep_files=False) -> np.ndarray:
