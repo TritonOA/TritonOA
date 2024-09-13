@@ -8,9 +8,8 @@ from typing import Any, Optional
 
 import numpy as np
 
-from tritonoa.modeling.at.base import AcousticsToolboxModel, SoundSpeedProfileAT, SSPLayer
+from tritonoa.modeling.at.base import AcousticsToolboxModel, Environment, SoundSpeedProfileAT, SSPLayer
 from tritonoa.modeling.array import Receiver, Source
-from tritonoa.modeling.environment.base import Environment
 from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.physics import range_ind_pressure_from_modes
 from tritonoa.modeling.util import clean_up_files

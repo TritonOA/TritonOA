@@ -11,7 +11,7 @@ from tritonoa.modeling.at.base import (
     SSPLayer,
 )
 from tritonoa.modeling.array import Receiver, Source
-from tritonoa.modeling.environment.base import Environment
+from tritonoa.modeling.at.base import Environment
 from tritonoa.modeling.environment.halfspace import Bottom, Top
 from tritonoa.modeling.util import clean_up_files
 
