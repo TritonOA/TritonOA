@@ -20,4 +20,4 @@ Repository = "https://github.com/NeptuneProjects/uwac-data-utils"
 where = ["src/"]
 
 [tool.setuptools.dynamic]
-version = {attr = "datautils.__version__"}
+version = {attr = "tritonoa.__version__"}
