@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 from typing import Any, Optional
 
@@ -150,6 +151,12 @@ class AcousticsToolboxModel(ABC):
         model_name: str,
     ) -> int:
         executable = self.get_executable(model_name)
+        if not executable.is_file():
+            executable = executable.name
+            if shutil.which(executable) is None:
+                raise FileNotFoundError(
+                    f"Executable `{executable}` not found in PATH"
+                )
         command = f"{executable} {self.environment.title}"
 
         try:
