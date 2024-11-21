@@ -46,7 +46,7 @@ class SoundSpeedProfile(ABC):
         ]
 
 
-def munk_ssp(z_max: float, dz: float = 1.0) -> dict:
+def munk_ssp(z_max: float, dz: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
     z = np.arange(0, z_max + dz, dz)
     B = 1200.0
     Z0 = 1200.0
@@ -54,4 +54,4 @@ def munk_ssp(z_max: float, dz: float = 1.0) -> dict:
     EP = 0.006
     eta = 2 * (z - Z0) / B
     c_p = C0 * (1 + EP * (eta + np.exp(-eta) - 1))
-    return {"z": z, "c_p": c_p}
+    return z, c_p
