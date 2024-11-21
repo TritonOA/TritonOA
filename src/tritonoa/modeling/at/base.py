@@ -12,7 +12,7 @@ from typing import Any, Optional
 import numpy as np
 
 from tritonoa.modeling.environment.halfspace import Bottom, Top
-from tritonoa.modeling.environment.ssp import SoundSpeedProfile
+from tritonoa.modeling.ssp import SoundSpeedProfile
 
 AT_EXECUTABLES = {
     "bellhop": Path("src/lib/at/bin/bellhop.exe"),
