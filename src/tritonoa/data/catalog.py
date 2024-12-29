@@ -2,6 +2,7 @@
 
 # TODO: Replace hydrophone specs w/ signal params
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
@@ -56,9 +57,8 @@ class Catalog:
         conditioner: SignalParams = SignalParams(),
         record_fmt_callback: Optional[callable] = None,
     ) -> pl.DataFrame:
-        files = self._get_files(dataset_path, glob_pattern)
-        records = []
-        for j, file in enumerate(files):
+        # TODO: Implement parallel file reading
+        def _process_file(file):
             reader = factory.get_reader(file.suffix)
             formatter = factory.get_formatter(file.suffix)
             headers = reader.read_headers(file)
@@ -67,11 +67,11 @@ class Catalog:
             for i, header in enumerate(headers):
                 records_from_file.append(
                     formatter.format_record(
-                        filename=file,
-                        record_number=i,
-                        header=header,
-                        clock=clock_params,
-                        conditioner=conditioner,
+                    filename=file,
+                    record_number=i,
+                    header=header,
+                    clock=clock_params,
+                    conditioner=conditioner,
                     )
                 )
 
@@ -79,11 +79,16 @@ class Catalog:
                 corrected_records = record_fmt_callback(records_from_file)
             else:
                 corrected_records = formatter.callback(records_from_file)
-            records.extend(corrected_records)
-            logging.debug(
-                f"{len(records) + 1} records | {j}/{len(files)} files processed."
-            )
+            logging.debug(f"{len(corrected_records)} records processed from {file}.")
+            return corrected_records
+        
+        files = self._get_files(dataset_path, glob_pattern)
 
+        with ThreadPoolExecutor(max_workers=len(files)) as executor:
+            results = list(executor.map(_process_file, files))
+
+        records = []
+        [records.extend(result) for result in results]
         self.records = records
         self.df = self._records_to_df()
         return self.df
