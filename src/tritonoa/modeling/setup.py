@@ -10,7 +10,7 @@ from scipy.interpolate import interp1d, griddata
 @dataclass
 class Layer:
     depth: Sequence[float]
-    range: float | Sequence[float]
+    range: Optional[float | Sequence[float]] = None
     transverse: Optional[Sequence[float]] = None
     compressional_speed: float | Sequence[float] = 1500.0
     shear_speed: float | Sequence[float] = 0.0
@@ -36,7 +36,7 @@ class Layer:
             setattr(self, attrib, self._to_array(getattr(self, attrib)))
             for attrib in self.__dataclass_fields__
         ]
-
+        # Check if any attribute is range-dependent
         self.range_dependent = any(
             [
                 self._check_bottom_range_dependence(getattr(self, attrib))
@@ -154,16 +154,23 @@ class Layer:
         raise ValueError("Invalid shape for attribute")
 
     def _create_2d_mesh(self, attrib: Sequence[float]) -> np.ndarray:
-        if (attrib.shape[0] == len(self.depth)) and (
-            attrib.shape[1] == len(self.range)
-        ):
-            return attrib
+        # Create a 2-D mesh with depth and range
+        # Case I: Single-element
         if attrib.size == 1:
             return np.full(
                 (len(self.depth), len(self.range)), attrib.item(), dtype=float
             )
+        # Case II: 1-D array
+        if len(attrib.shape) == 1:
+            return attrib[:, np.newaxis] * np.ones(len(self.range), dtype=float)
+        # Case III: 2-D array with same number of rows as depth, but not range columns
         if attrib.shape[0] == len(self.depth) and attrib.shape[1] != len(self.range):
             return attrib[:, np.newaxis] * np.ones(len(self.range), dtype=float)
+        # Case IV: 2-D array with same dimensions as (depth, range)
+        if (attrib.shape[0] == len(self.depth)) and (
+            attrib.shape[1] == len(self.range)
+        ):
+            return attrib
         raise ValueError("Invalid shape for attribute")
 
     def _create_3d_mesh(self, attrib: Sequence[float]) -> np.ndarray:
@@ -184,145 +191,31 @@ class Layer:
                 raise ValueError("Invalid shape for attribute")
 
 
-# @dataclass
-# class Halfspace:
-#     halfspace_depth: Sequence[float]
+@dataclass
+class Source:
+    depth: float
+    frequency: float
 
 
-# @dataclass
-# class DataHolder:
-#     data: Dict[str, np.ndarray] = field(default_factory=dict)
-#     coordinates: Union[np.ndarray, None] = field(default=None)
-#     interpolation_methods: List[str] = field(default_factory=lambda: ["linear"])
 
-#     def __post_init__(self):
-#         # Ensure data and coordinates are numpy arrays
-#         for key in self.data:
-#             self.data[key] = np.array(self.data[key])
-#         if self.coordinates is not None:
-#             self.coordinates = np.array(self.coordinates)
+class Environment:
+    def __init__(self, layers: Sequence[Layer]) -> None:
+        self.layers = layers
 
-#         if self.coordinates is not None and len(self.coordinates.shape) != 2:
-#             raise ValueError(
-#                 "Coordinates should be in 2-D format: (n_points, n_dimensions)"
-#             )
-
-#         for key in self.data:
-#             if len(self.coordinates) != len(self.data[key]):
-#                 raise ValueError(
-#                     f"Data and coordinates should have matching first dimensions for dataset '{key}'"
-#                 )
-
-#     def to_cylindrical(self):
-#         """
-#         Converts Cartesian coordinates to cylindrical coordinates (r, theta, z).
-#         Works for 1-D, 2-D, and 3-D coordinates.
-#         """
-#         if self.coordinates is None:
-#             raise ValueError("Coordinates are required for cylindrical conversion")
-
-#         # Extract coordinates
-#         x = self.coordinates[:, 0]
-#         y = (
-#             self.coordinates[:, 1]
-#             if self.coordinates.shape[1] > 1
-#             else np.zeros_like(x)
-#         )
-#         z = (
-#             self.coordinates[:, 2]
-#             if self.coordinates.shape[1] > 2
-#             else np.zeros_like(x)
-#         )
-
-#         # Calculate cylindrical coordinates
-#         r = np.sqrt(x**2 + y**2)
-#         theta = np.arctan2(y, x)
-
-#         # Update coordinates to cylindrical format
-#         self.coordinates = np.column_stack((r, theta, z))
-
-#     def interpolate(
-#         self, new_coordinates: np.ndarray, methods: Optional[List[str]] = None
-#     ) -> Dict[str, np.ndarray]:
-#         """
-#         Interpolates the data at the given new coordinates.
-#         Allows specifying different interpolation methods for each dimension.
-#         """
-#         if not self.data or self.coordinates is None:
-#             raise ValueError("Both data and coordinates are required for interpolation")
-
-#         methods = methods or self.interpolation_methods
-#         interpolated_data = {}
-
-#         for key, values in self.data.items():
-#             if len(values.shape) == 1:  # 1-D data
-#                 interpolator = interp1d(
-#                     self.coordinates[:, 0],
-#                     values,
-#                     kind=methods[0],
-#                     fill_value="extrapolate",
-#                 )
-#                 interpolated_data[key] = interpolator(new_coordinates[:, 0])
-#             else:  # Multi-dimensional data (2-D or 3-D)
-#                 interpolated_values = []
-#                 for i in range(self.coordinates.shape[1]):
-#                     interpolator = interp1d(
-#                         self.coordinates[:, i],
-#                         values,
-#                         kind=methods[i % len(methods)],
-#                         fill_value="extrapolate",
-#                         axis=0,
-#                     )
-#                     interpolated_values.append(interpolator(new_coordinates[:, i]))
-#                 interpolated_data[key] = np.mean(interpolated_values, axis=0)
-
-#         return interpolated_data
-
-#     def resample(
-#         self, new_grid: np.ndarray, methods: Optional[List[str]] = None
-#     ) -> Dict[str, np.ndarray]:
-#         """
-#         Resamples data on a new grid, which can be in 1-D, 2-D, or 3-D.
-#         """
-#         return self.interpolate(new_grid, methods)
-
-#     def extrapolate(
-#         self, new_coordinates: np.ndarray, num_points: int = 5
-#     ) -> Dict[str, np.ndarray]:
-#         """
-#         Extrapolates data using a linear fit based on the average of the last `num_points`.
-#         """
-#         if not self.data or self.coordinates is None:
-#             raise ValueError("Both data and coordinates are required for extrapolation")
-
-#         extrapolated_data = {}
-#         for key, values in self.data.items():
-#             if len(values.shape) == 1:  # 1-D extrapolation
-#                 x = self.coordinates[:, 0]
-#                 y = values
-#                 slope = (y[-1] - y[-num_points]) / (x[-1] - x[-num_points])
-#                 intercept = y[-1] - slope * x[-1]
-#                 extrapolated_values = slope * new_coordinates[:, 0] + intercept
-#                 extrapolated_data[key] = extrapolated_values
-#             else:
-#                 # For multi-dimensional extrapolation, using nearest method or linear approximation
-#                 extrapolated_data[key] = self.interpolate(
-#                     new_coordinates, methods=["nearest"]
-#                 )[key]
-
-#         return extrapolated_data
+    def resample_range(self, range: np.ndarray) -> None:
+        for layer in self.layers:
+            pass
+        return
 
 
-# # Example Usage:
-# data = {"set1": np.array([1, 2, 3, 4]), "set2": np.array([4, 3, 2, 1])}
-# coords = np.array([[0], [1], [2], [3]])
-# data_holder = DataHolder(data=data, coordinates=coords)
-# new_coords = np.array([[0.5], [1.5], [2.5]])
-# interpolated_data = data_holder.interpolate(new_coords)
-# print(interpolated_data)
+class Receiver:
+    def __init__(self, depth: float) -> None:
+        self.depth = depth
 
-# # Converting from Cartesian to cylindrical
-# coords_3d = np.array([[1, 1, 1], [2, 2, 2], [3, 3, 3]])
-# data_holder_3d = DataHolder(data={"set1": np.array([1, 2, 3])}, coordinates=coords_3d)
-# data_holder_3d.to_cylindrical()
-# print(data_holder_3d.coordinates)
+
+
+class Configuration:
+    def __init__(self, source: Source, receiver: Receiver, environment: Environment) -> None:
+        self.source = source
+        self.receiver = receiver
+        self.environment = environment
