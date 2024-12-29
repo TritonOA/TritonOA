@@ -251,16 +251,21 @@ class Catalog:
         records = []
         for i, f in enumerate(filenames):
             n_records = cat_data["timestamps"][0][0].transpose(2, 1, 0).shape[1]
+            filename = Path(f) if not isinstance(f, Path) else f
+            file_format = factory.validate_file_format(filename.suffix)
+            
             for j in range(n_records):
+                timestamp = convert_yydfrac_to_timestamp(*timestamp_data[i][j])
+                timestamp_orig=convert_yydfrac_to_timestamp(
+                    *timestamp_orig_data[i][j]
+                )
                 records.append(
                     DataRecord(
-                        filename=Path(f),
+                        filename=filename,
                         record_number=j,
-                        file_format=factory.validate_file_format(Path(f).suffix),
-                        timestamp=convert_yydfrac_to_timestamp(*timestamp_data[i][j]),
-                        timestamp_orig=convert_yydfrac_to_timestamp(
-                            *timestamp_orig_data[i][j]
-                        ),
+                        file_format=file_format,
+                        timestamp=timestamp,
+                        timestamp_orig=timestamp_orig,
                         sampling_rate=rhfs,
                         sampling_rate_orig=rhfs_orig,
                         gain=fixed_gain,
