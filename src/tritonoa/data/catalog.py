@@ -57,7 +57,6 @@ class Catalog:
         conditioner: SignalParams = SignalParams(),
         record_fmt_callback: Optional[callable] = None,
     ) -> pl.DataFrame:
-        # TODO: Implement parallel file reading
         def _process_file(file):
             reader = factory.get_reader(file.suffix)
             formatter = factory.get_formatter(file.suffix)
@@ -67,11 +66,11 @@ class Catalog:
             for i, header in enumerate(headers):
                 records_from_file.append(
                     formatter.format_record(
-                    filename=file,
-                    record_number=i,
-                    header=header,
-                    clock=clock_params,
-                    conditioner=conditioner,
+                        filename=file,
+                        record_number=i,
+                        header=header,
+                        clock=clock_params,
+                        conditioner=conditioner,
                     )
                 )
 
@@ -81,7 +80,7 @@ class Catalog:
                 corrected_records = formatter.callback(records_from_file)
             logging.debug(f"{len(corrected_records)} records processed from {file}.")
             return corrected_records
-        
+
         files = self._get_files(dataset_path, glob_pattern)
 
         with ThreadPoolExecutor(max_workers=len(files)) as executor:
