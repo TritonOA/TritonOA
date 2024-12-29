@@ -238,7 +238,9 @@ class Catalog:
         cat_name = list(mdict.keys()).pop()
         cat_data = mdict[cat_name]
 
-        filenames = cat_data["filenames"][0][0].astype(str).tolist()
+        filenames = [
+            i.strip() for i in cat_data["filenames"][0][0].astype(str).tolist()
+        ]
         timestamp_data = cat_data["timestamps"][0][0].transpose(2, 1, 0)
         timestamp_orig_data = cat_data["timestamps_orig"][0][0].transpose(2, 1, 0)
         rhfs_orig = float(cat_data["rhfs_orig"][0][0].squeeze())
@@ -253,10 +255,10 @@ class Catalog:
             n_records = cat_data["timestamps"][0][0].transpose(2, 1, 0).shape[1]
             filename = Path(f) if not isinstance(f, Path) else f
             file_format = factory.validate_file_format(filename.suffix)
-            
+
             for j in range(n_records):
                 timestamp = convert_yydfrac_to_timestamp(*timestamp_data[i][j])
-                timestamp_orig=convert_yydfrac_to_timestamp(
+                timestamp_orig = convert_yydfrac_to_timestamp(
                     *timestamp_orig_data[i][j]
                 )
                 records.append(
