@@ -29,56 +29,6 @@ class NoDataError(Exception):
     pass
 
 
-def _check_buffer(
-    max_buffer: int, num_channels: int, sampling_rate: float, df: pl.DataFrame
-) -> int:
-    _report_buffer(max_buffer, num_channels, sampling_rate)
-    expected_buffer = _compute_expected_buffer(df)
-    if expected_buffer > max_buffer:
-        warnings.warn(
-            f"Buffer length {max_buffer} is less than expected samples {expected_buffer}.",
-            BufferExceededWarning,
-        )
-
-    return expected_buffer
-
-
-def _compute_expected_buffer(df: pl.DataFrame) -> int:
-    """Computes expected samples.
-
-    Args:
-        df (pl.DataFrame): Data frame.
-
-    Returns:
-        int: Expected samples.
-    """
-    expected_samples = 0
-    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
-        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
-        expected_samples += df.filter(
-            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
-        )["npts"].sum()
-    logging.debug(f"Expected samples: {expected_samples}")
-    return expected_samples
-
-
-def _exceeds_max_time_gap(
-    timestamp: np.datetime64,
-    time_end: np.datetime64,
-    max_time_gap: float,
-) -> bool:
-    time_gap = abs(timestamp - time_end) / np.timedelta64(1, "s")
-    print("time_gap", time_gap)
-    print("max_time_gap", max_time_gap)
-    if time_gap > max_time_gap:
-        return True
-    return False
-
-
-def _get_nchannels(df: pl.DataFrame) -> int:
-    return len(df.select(pl.first("gain")).item())
-
-
 def read_catalogue(
     file_path: Path,
     time_start: Optional[np.datetime64] = None,
@@ -212,6 +162,56 @@ def read_catalogue(
 
 def read_data(file_path: Path, data_type: Optional[str] = None, **kwargs) -> DataStream:
     return factory.get_reader(file_path.suffix, data_type).read(file_path, **kwargs)
+
+
+def _check_buffer(
+    max_buffer: int, num_channels: int, sampling_rate: float, df: pl.DataFrame
+) -> int:
+    _report_buffer(max_buffer, num_channels, sampling_rate)
+    expected_buffer = _compute_expected_buffer(df)
+    if expected_buffer > max_buffer:
+        warnings.warn(
+            f"Buffer length {max_buffer} is less than expected samples {expected_buffer}.",
+            BufferExceededWarning,
+        )
+
+    return expected_buffer
+
+
+def _compute_expected_buffer(df: pl.DataFrame) -> int:
+    """Computes expected samples.
+
+    Args:
+        df (pl.DataFrame): Data frame.
+
+    Returns:
+        int: Expected samples.
+    """
+    expected_samples = 0
+    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
+        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
+        expected_samples += df.filter(
+            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
+        )["npts"].sum()
+    logging.debug(f"Expected samples: {expected_samples}")
+    return expected_samples
+
+
+def _exceeds_max_time_gap(
+    timestamp: np.datetime64,
+    time_end: np.datetime64,
+    max_time_gap: float,
+) -> bool:
+    time_gap = abs(timestamp - time_end) / np.timedelta64(1, "s")
+    print("time_gap", time_gap)
+    print("max_time_gap", max_time_gap)
+    if time_gap > max_time_gap:
+        return True
+    return False
+
+
+def _get_nchannels(df: pl.DataFrame) -> int:
+    return len(df.select(pl.first("gain")).item())
 
 
 def _report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None:
