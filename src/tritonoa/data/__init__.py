@@ -7,4 +7,4 @@
 # import tritonoa.data.signal
 # import tritonoa.data.time
 # import tritonoa.data.util
-import tritonoa.data.catalog
+import tritonoa.data.inventory

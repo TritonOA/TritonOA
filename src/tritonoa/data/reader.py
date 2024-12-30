@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 import polars as pl
 
-from tritonoa.data.catalog import Catalog
+from tritonoa.data.inventory import Inventory
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats
@@ -29,17 +29,17 @@ class NoDataError(Exception):
     pass
 
 
-def read_catalogue(
+def read_inventory(
     file_path: Path,
     time_start: Optional[np.datetime64] = None,
     time_end: Optional[np.datetime64] = None,
     channels: Optional[int | list[int]] = None,
     max_buffer: int = MAX_BUFFER,
 ) -> DataStream:
-    """Reads data from catalogue using the query parameters.
+    """Reads data from inventory using the query parameters.
 
     Args:
-        query (CatalogueQuery): Query parameters.
+        query (InventoryQuery): Query parameters.
         max_buffer (int): Maximum buffer length in samples.
 
     Returns:
@@ -47,7 +47,7 @@ def read_catalogue(
 
     Raises:
         NoDataError: If no data is found for the given query parameters.
-        ValueError: If multiple sampling rates are found in the catalogue.
+        ValueError: If multiple sampling rates are found in the inventory.
         BufferExceededWarning: If buffer length is less than expected samples.
     """
 
@@ -56,7 +56,7 @@ def read_catalogue(
             0, pl.Series("row_nr", list(range(len(df))))
         )
 
-    catalog = Catalog().load(file_path)
+    catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
     num_channels = (
@@ -89,7 +89,7 @@ def read_catalogue(
     )
     if len(set(sampling_rates)) > 1:
         raise ValueError(
-            "Multiple sampling rates found in the catalogue; unable to proceed."
+            "Multiple sampling rates found in the inventory; unable to proceed."
         )
     sampling_rate = sampling_rates[0]
 

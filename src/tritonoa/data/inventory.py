@@ -34,8 +34,8 @@ class Header(Protocol):
     ...
 
 
-class CatalogueFileFormat(Enum):
-    """File formats for record catalogues."""
+class InventoryFileFormat(Enum):
+    """File formats for record inventorys."""
 
     BIN = "bin"
     CSV = "csv"
@@ -43,7 +43,7 @@ class CatalogueFileFormat(Enum):
     MAT = "mat"
 
 
-class Catalog:
+class Inventory:
     def __init__(self, records: Optional[list[DataRecord]] = None):
         self.records = records
         if records is not None:
@@ -124,41 +124,41 @@ class Catalog:
             err_msg = f"No files found in directory {dataset_path} with pattern '{glob_pattern}'."
             logging.error(err_msg)
             raise FileNotFoundError(err_msg)
-        logging.debug(f"{len(files)} files found for record catalogue.")
+        logging.debug(f"{len(files)} files found for record inventory.")
         return files
 
     def load(self, filepath: Path) -> pl.DataFrame:
-        """Load the record catalogue from file.
+        """Load the record inventory from file.
 
         Args:
-            filepath (Path): Path to the catalogue file.
+            filepath (Path): Path to the inventory file.
 
         Returns:
-            DatasetCatalogue: Record catalogue.
+            DatasetInventory: Record inventory.
 
         Raises:
             ValueError: If file format is not recognized.
         """
         extension = filepath.suffix[1:].lower()
 
-        if extension not in CatalogueFileFormat:
+        if extension not in InventoryFileFormat:
             raise ValueError(f"File format '{extension}' is not recognized.")
 
-        if extension == CatalogueFileFormat.BIN.value:
+        if extension == InventoryFileFormat.BIN.value:
             self._read_bin(filepath)
-        if extension == CatalogueFileFormat.CSV.value:
+        if extension == InventoryFileFormat.CSV.value:
             self._read_csv(filepath)
-        if extension == CatalogueFileFormat.JSON.value:
+        if extension == InventoryFileFormat.JSON.value:
             self._read_json(filepath)
-        if extension == CatalogueFileFormat.MAT.value:
+        if extension == InventoryFileFormat.MAT.value:
             self._read_mat(filepath)
         return self.df
 
     def _read_bin(self, filepath: Path) -> None:
-        """Read the record catalogue from binary file.
+        """Read the record inventory from binary file.
 
         Args:
-            filepath (Path): Path to the catalogue file.
+            filepath (Path): Path to the inventory file.
 
         Returns:
             None
@@ -166,10 +166,10 @@ class Catalog:
         self.df = pl.DataFrame.deserialize(filepath, format="binary")
 
     def _read_csv(self, filepath: Path) -> None:
-        """Read the record catalogue from CSV file.
+        """Read the record inventory from CSV file.
 
         Args:
-            filepath (Path): Path to the catalogue file.
+            filepath (Path): Path to the inventory file.
 
         Returns:
             None
@@ -192,10 +192,10 @@ class Catalog:
         )
 
     def _read_json(self, filepath: Path) -> None:
-        """Read the record catalogue from JSON file.
+        """Read the record inventory from JSON file.
 
         Args:
-            filepath (Path): Path to the catalogue file.
+            filepath (Path): Path to the inventory file.
 
         Returns:
             None
@@ -203,10 +203,10 @@ class Catalog:
         self.df = pl.DataFrame.deserialize(filepath, format="json")
 
     def _read_mat(self, filepath: Path) -> None:
-        """Read the record catalogue from MAT file.
+        """Read the record inventory from MAT file.
 
         Args:
-            filepath (Path): Path to the catalogue file.
+            filepath (Path): Path to the inventory file.
 
         Returns:
             None
@@ -352,11 +352,11 @@ class Catalog:
         }
 
     def save(self, path: Path | str):
-        """Save the catalogue to file.
+        """Save the inventory to file.
 
         Args:
-            savepath (Path): Path to save the catalogue file.
-            fmt (str | list[str], optional): File format(s) to save the catalogue. Defaults to "csv".
+            savepath (Path): Path to save the inventory file.
+            fmt (str | list[str], optional): File format(s) to save the inventory. Defaults to "csv".
 
         Raises:
             ValueError: If file format is not recognized.
@@ -365,25 +365,25 @@ class Catalog:
         extension = savepath.suffix[1:].lower()
         if extension is None:
             extension = "csv"
-        if extension not in CatalogueFileFormat:
+        if extension not in InventoryFileFormat:
             raise ValueError(f"File format '{extension}' is not recognized.")
 
         savepath.parent.mkdir(parents=True, exist_ok=True)
 
-        if extension == CatalogueFileFormat.BIN.name.lower():
+        if extension == InventoryFileFormat.BIN.name.lower():
             self.write_binary(savepath.parent / (savepath.stem + ".bin"))
-        if extension == CatalogueFileFormat.CSV.name.lower():
+        if extension == InventoryFileFormat.CSV.name.lower():
             self.write_csv(savepath.parent / (savepath.stem + ".csv"))
-        if extension == CatalogueFileFormat.JSON.name.lower():
+        if extension == InventoryFileFormat.JSON.name.lower():
             self.write_json(savepath.parent / (savepath.stem + ".json"))
-        if extension == CatalogueFileFormat.MAT.name.lower():
+        if extension == InventoryFileFormat.MAT.name.lower():
             self.write_mat(savepath.parent / (savepath.stem + ".mat"))
 
     def write_binary(self, savepath: Path):
-        """Write the catalogue to binary file.
+        """Write the inventory to binary file.
 
         Args:
-            savepath (Path): Path to save the catalogue file.
+            savepath (Path): Path to save the inventory file.
 
         Returns:
             None
@@ -391,10 +391,10 @@ class Catalog:
         self.df.serialize(savepath, format="binary")
 
     def write_csv(self, savepath: Path):
-        """Write the catalogue to CSV file.
+        """Write the inventory to CSV file.
 
         Args:
-            savepath (Path): Path to save the catalogue file.
+            savepath (Path): Path to save the inventory file.
 
         Returns:
             None
@@ -403,10 +403,10 @@ class Catalog:
         df_out.write_csv(savepath)
 
     def write_json(self, savepath: Path):
-        """Write the catalogue to JSON file.
+        """Write the inventory to JSON file.
 
         Args:
-            savepath (Path): Path to save the catalogue file.
+            savepath (Path): Path to save the inventory file.
 
         Returns:
             None
@@ -414,10 +414,10 @@ class Catalog:
         self.df.serialize(savepath, format="json")
 
     def write_mat(self, savepath: Path):
-        """Write the catalogue to MAT file.
+        """Write the inventory to MAT file.
 
         Args:
-            savepath (Path): Path to save the catalogue file.
+            savepath (Path): Path to save the inventory file.
 
         Returns:
             None

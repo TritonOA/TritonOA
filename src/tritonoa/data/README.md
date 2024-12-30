@@ -39,9 +39,9 @@ pip install git+https://github.com/NeptuneProjects/uwac-data-utils.git
 ## Usage
 
 The API is designed to efficiently query large amounts of acoustic data.
-This is done by constructing a catalogue of the data files, which includes metadata such as the file path, start time, and sampling rate.
-The catalogue can then be queried to retrieve data in a specific time range.
-Two main classes are provided for this purpose: `datautils.query.FileInfoQuery` and `datautils.query.CatalogueQuery`.
+This is done by constructing a inventory of the data files, which includes metadata such as the file path, start time, and sampling rate.
+The inventory can then be queried to retrieve data in a specific time range.
+Two main classes are provided for this purpose: `datautils.query.FileInfoQuery` and `datautils.query.InventoryQuery`.
 Each has its own convenient constructor functions which read query data from TOML files.
 
 ### Data organization
@@ -75,12 +75,12 @@ For example, data might be organized into a directory structure according to mul
 └── ...
 ```
 
-### Cataloguing data files with `DatasetCatalogue`
+### Inventoryuing data files with `DatasetInventory`
 
-#### Building a catalogue
+#### Building a inventory
 
-To build a catalogue, information about the files must first be gathered.
-This is done by constructing a `datautils.query.FileInfoQuery` object, which is then used to build the catalogue.
+To build a inventory, information about the files must first be gathered.
+This is done by constructing a `datautils.query.FileInfoQuery` object, which is then used to build the inventory.
 The `FileInfoQuery` object can be constructed direclty in a Python script, or more conveniently using a TOML file:
 
 ```toml
@@ -108,84 +108,84 @@ serial_number = [0, 1, 2, 3]
 ```
 The above example specifies the following:
 - `[ARRAY001]`: A unique identifier for a specific sensor or array.
-- `[ARRAY001.data]`: Data file and catalogue information.
+- `[ARRAY001.data]`: Data file and inventory information.
   - `directory`: The directory where the data files are located.
   - `glob_pattern`: A glob pattern to match the data files.
-  - `destination`: The directory where the catalogue will be saved.
+  - `destination`: The directory where the inventory will be saved.
   - `file_format`: The format of the data files. This is optional, and will be inferred from the file extension if not provided.
 - `[ARRAY001.clock]`: Optional metadata about the clock used to timestamp the data. This section is used to correct for clock drift. If not provided, clock drift is assumed to be zero.
-  - `time_check_0` and `time_check_1`: The start and end times of the data to be included in the catalogue. This is optional, and will include all data if not provided.
+  - `time_check_0` and `time_check_1`: The start and end times of the data to be included in the inventory. This is optional, and will include all data if not provided.
   - `offset_0` and `offset_1`: The time offsets for the start and end times. This is optional, and will default to 0 if not provided.
 - `[ARRAY001.hydrophone]`: Optional metadata about the hydrophone. This section is used to correct for hydrophone gain and sensitivity. If not provided, no corrections are applied.
 
 Multiple arrays can be specified in the same file, as denoted by the additional `[ARRAY002]` section.
-The catalogue is contained within the `datautils.catalogue.DatasetCatalogue` object as a `polars.DataFrame`.
-To build a catalogues for each of the arrays specified in the above TOML file, use the following code:
+The inventory is contained within the `datautils.inventory.DatasetInventory` object as a `polars.DataFrame`.
+To build a inventorys for each of the arrays specified in the above TOML file, use the following code:
 
 ```python
-from datautils.catalogue import DatasetCatalogue
+from datautils.inventory import DatasetInventory
 from datautils.query import load_file_query
 
 queries = load_file_query("path/to/query.toml")
-catalogues = []
+inventorys = []
 for query in queries:
-    catalogues.append(DatasetCatalogue.build_catalogue(query))
+    inventorys.append(DatasetInventory.build_inventory(query))
 
-[print(catalogue.df) for catalogue in catalogues]
+[print(inventory.df) for inventory in inventorys]
 ```
 
-#### Saving a catalogue
+#### Saving a inventory
 
-The `DatasetCatalogue` object has a `save` method save the catalogue to disk in `.csv`, `.json`, or `.MAT` formats.
+The `DatasetInventory` object has a `save` method save the inventory to disk in `.csv`, `.json`, or `.MAT` formats.
 
 ```python
-# Save the catalogue to a CSV file (default)
-catalogue.save("path/to/catalogue", fmt="csv")
+# Save the inventory to a CSV file (default)
+inventory.save("path/to/inventory", fmt="csv")
 
-# Save the catalogue to a JSON file
-catalogue.save("path/to/catalogue", fmt="json")
+# Save the inventory to a JSON file
+inventory.save("path/to/inventory", fmt="json")
 
-# Save the catalogue to a MAT file
-catalogue.save("path/to/catalogue", fmt="mat")
+# Save the inventory to a MAT file
+inventory.save("path/to/inventory", fmt="mat")
 
-# Save the catalogue to all three formats
-catalogue.save("path/to/catalogue", fmt=["csv", "json", "mat"])
+# Save the inventory to all three formats
+inventory.save("path/to/inventory", fmt=["csv", "json", "mat"])
 ```
 
-#### Building and saving multiple catalogues
+#### Building and saving multiple inventorys
 
-The `datautils.query.build_and_save_catalogues` function can be used to build and save multiple catalogues at once.
+The `datautils.query.build_and_save_inventorys` function can be used to build and save multiple inventorys at once.
 
 ```python
-from datautils.catalogue import build_and_save_catalogues
+from datautils.inventory import build_and_save_inventorys
 from datautils.query import load_file_query
 
 queries = load_file_query("path/to/query.toml")
-build_and_save_catalogues(queries, fmt=["csv", "json", "mat"])
+build_and_save_inventorys(queries, fmt=["csv", "json", "mat"])
 ```
 
-#### Loading a catalogue
+#### Loading a inventory
 
-A catalogue can be loaded from disk using the `datautils.catalogue.load_catalogue` function.
+A inventory can be loaded from disk using the `datautils.inventory.load_inventory` function.
 
 ```python
-from datautils.catalogue import DatasetCatalogue
+from datautils.inventory import DatasetInventory
 
-catalogue = DatasetCatalogue().load_catalogue("path/to/catalogue.csv")
+inventory = DatasetInventory().load_inventory("path/to/inventory.csv")
 ```
 
 
-### Reading data using a `CatalogueQuery`
+### Reading data using a `InventoryQuery`
 
-Once a catalogue has been built, data can be read from disk by querying the catalogue and returning data.
+Once a inventory has been built, data can be read from disk by querying the inventory and returning data.
 
-#### Constructing a catalogue query
+#### Constructing a inventory query
 
 Here again, the query can be constructed directly in a Python script, or more conveniently using a TOML file:
 
 ```toml
 [ARRAY001]
-catalogue = "path/to/catalogue.csv"
+inventory = "path/to/inventory.csv"
 destination = "." # Not currently used
 time_start = 2009-05-22T12:00:00
 time_end = 2009-05-22T13:00:00
@@ -196,7 +196,7 @@ channels = [0, 1, 2, 3]
 ```
 The above example specifies the following:
 - `[ARRAY001]`: A unique identifier for a specific sensor or array.
-  - `catalogue`: The path to the catalogue file.
+  - `inventory`: The path to the inventory file.
   - `destination`: The directory where the data will be saved. This is not currently used.
   - `time_start` and `time_end`: The start and end times of the data to be read.
   - `channels`: The channels to be read.
@@ -209,12 +209,12 @@ To read data for each of the arrays specified in the above TOML file, use the fo
 
 ```python
 from datautils.data import read
-from datautils.query import load_catalogue_query
+from datautils.query import load_inventory_query
 
-queries = load_catalogue_query("path/to/query.toml")
+queries = load_inventory_query("path/to/query.toml")
 for query in queries:
-    cat_query = datautils.query.CatalogueQuery(
-          catalogue=query.catalogue,
+    cat_query = datautils.query.InventoryQuery(
+          inventory=query.inventory,
           destination=query.destination,
           time_start=query.time_start,
           time_end=query.time_end,
