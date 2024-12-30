@@ -188,6 +188,21 @@ class DataStream:
         time_int = self.time_vector.astype("int64") / TIME_CONVERSION_FACTOR
         return time_int - time_int[0]
 
+    @property
+    def shape(self) -> tuple[int, int]:
+        """Returns shape of data.
+
+        Returns:
+            tuple[int, int]: Shape of data.
+
+        Raises:
+            NoDataWarning: If no data is found in the object.
+        """
+        if self.data is None:
+            warnings.warn("No data in variable 'X'.", NoDataWarning)
+            return None
+        return self.data.shape
+
     def copy(self) -> DataStream:
         return deepcopy(self)
 
