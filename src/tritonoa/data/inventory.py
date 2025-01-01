@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional, Protocol
 
 import polars as pl
+from tqdm import tqdm
 import scipy.io
 
 from tritonoa.data.formats.base import DataRecord
@@ -84,7 +85,7 @@ class Inventory:
         files = self._get_files(dataset_path, glob_pattern)
 
         with ThreadPoolExecutor(max_workers=len(files)) as executor:
-            results = list(executor.map(_process_file, files))
+            results = list(tqdm(executor.map(_process_file, files), total=len(files), desc="Processing files"))
 
         records = []
         [records.extend(result) for result in results]
