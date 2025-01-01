@@ -4,7 +4,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from functools import partial
 import logging
 from pathlib import Path
@@ -35,13 +35,17 @@ class Header(Protocol):
     ...
 
 
-class InventoryFileFormat(Enum):
+class InventoryFileFormat(StrEnum):
     """File formats for record inventorys."""
 
     BIN = "bin"
     CSV = "csv"
     JSON = "json"
     MAT = "mat"
+
+    def __contains__(cls, item) -> bool:
+        print([member.value for member in cls])
+        return item in (member.value for member in cls)
 
 
 class Inventory:
@@ -142,7 +146,7 @@ class Inventory:
         """
         extension = filepath.suffix[1:].lower()
 
-        if extension not in InventoryFileFormat:
+        if extension not in InventoryFileFormat or extension == "":
             raise ValueError(f"File format '{extension}' is not recognized.")
 
         if extension == InventoryFileFormat.BIN.value:
@@ -364,8 +368,8 @@ class Inventory:
         """
         savepath = Path(path)
         extension = savepath.suffix[1:].lower()
-        if extension is None:
-            extension = "csv"
+        if extension is None or extension == "":
+            extension = InventoryFileFormat.CSV.value
         if extension not in InventoryFileFormat:
             raise ValueError(f"File format '{extension}' is not recognized.")
 
