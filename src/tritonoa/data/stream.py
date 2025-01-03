@@ -81,7 +81,8 @@ class DataStream:
             stats.time_end = new_timevec[-1]
             data = self.data[index[0], index[1]]
         else:
-            data = self.data[index]
+            # np.atleast_2d preserves behavior of slicing method.
+            data = np.atleast_2d(self.data[index])
         return DataStream(stats=stats, data=data)
 
     def _post_init(self):
