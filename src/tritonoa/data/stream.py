@@ -70,18 +70,18 @@ class DataStream:
         self.data = data
         self._post_init()
 
-    def __getitem__(self, index: int | slice) -> np.ndarray:
+    def __getitem__(self, index: int | tuple) -> np.ndarray:
         """Returns data and time vector sliced by time index."""
         orig_timevec = self.time_vector
         stats = deepcopy(self.stats)
         if isinstance(index, tuple):
-            stats.channels = self.stats.channels[index[1]]
-            new_timevec = orig_timevec[index[0]]
+            stats.channels = self.stats.channels[index[0]]
+            new_timevec = orig_timevec[index[1]]
+            stats.time_init = new_timevec[0]
+            stats.time_end = new_timevec[-1]
+            data = self.data[index[0], index[1]]
         else:
-            new_timevec = orig_timevec[index]
-        stats.time_init = new_timevec[0]
-        stats.time_end = new_timevec[-1]
-        data = self.data[:, index]
+            data = self.data[index]
         return DataStream(stats=stats, data=data)
 
     def _post_init(self):
@@ -153,6 +153,8 @@ class DataStream:
         if self.data is None:
             warnings.warn("No data in variable 'X'.", NoDataWarning)
             return None
+        if len(self.data.shape) == 1:
+            return self.data.shape[0]
         return self.data.shape[1]
 
     @property
