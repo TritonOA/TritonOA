@@ -203,8 +203,6 @@ def _exceeds_max_time_gap(
     max_time_gap: float,
 ) -> bool:
     time_gap = abs(timestamp - time_end) / np.timedelta64(1, "s")
-    print("time_gap", time_gap)
-    print("max_time_gap", max_time_gap)
     if time_gap > max_time_gap:
         return True
     return False
