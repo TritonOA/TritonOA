@@ -94,7 +94,7 @@ def read_inventory(
 
     marker = 0
     time_init = None
-    time_end = None
+    time_stop = None
     max_time_gap = 1 / sampling_rate
 
     for filename, timestamp, gain, sensitivity in zip(
@@ -105,8 +105,8 @@ def read_inventory(
         if time_init is None:
             time_init = timestamp
         # Check time gap between files and stop if files are not continuous:
-        if time_end is not None and _exceeds_max_time_gap(
-            timestamp, time_end, max_time_gap
+        if time_stop is not None and _exceeds_max_time_gap(
+            timestamp, time_stop, max_time_gap
         ):
             warnings.warn(
                 "Files are not continuous; time gap between files is greater than 1/sampling_rate.\n"
@@ -133,7 +133,7 @@ def read_inventory(
         waveform[:, marker : marker + data.shape[1]] = data
         marker += data.shape[1]
         # Compute time of last point in waveform:
-        time_end = timestamp + np.timedelta64(
+        time_stop = timestamp + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * data.shape[1] / sampling_rate), TIME_PRECISION
         )
 
@@ -145,7 +145,7 @@ def read_inventory(
         stats=DataStreamStats(
             channels=channels,
             time_init=time_init,
-            time_end=time_end,
+            time_end=time_stop,
             sampling_rate=sampling_rate,
             units=units,
         ),
