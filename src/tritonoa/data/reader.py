@@ -59,12 +59,6 @@ def read_inventory(
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
-    num_channels = (
-        _get_nchannels(df)
-        if channels is None
-        else len([channels] if isinstance(channels, int) else channels)
-    )
-
     if channels is None:
         num_channels = _get_nchannels(df)
     else:
