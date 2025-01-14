@@ -497,7 +497,7 @@ class DataStream:
             self.data = np.empty(0, dtype=dtype)
             return self
         delta = abs(delta)
-        total = len(self.data) - delta
+        total = self.num_samples - delta
         if endtime == self.stats.time_init:
             total = 1
         self.data = self.data[:, :total]
