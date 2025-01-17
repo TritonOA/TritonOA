@@ -2,7 +2,7 @@
 
 # This script downloads and installs the Acoustics Toolbox software.
 
-URL="http://oalib.hlsresearch.com/AcousticsToolbox/at_2023_5_18.zip"
+URL="http://oalib.hlsresearch.com/AcousticsToolbox/at_2024_12_25.zip"
 DLDEST=src/tmp
 LIBDIR=src/lib
 SETUPDIR=setup/at
