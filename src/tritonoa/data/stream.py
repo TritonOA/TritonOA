@@ -82,6 +82,7 @@ class DataStream:
             data = self.data[index[0], index[1]]
         else:
             # np.atleast_2d preserves behavior of slicing method.
+            stats.channels = self.stats.channels[index]
             data = np.atleast_2d(self.data[index])
         return DataStream(stats=stats, data=data)
 
