@@ -156,11 +156,9 @@ def read_inventory(
 
 def read_numpy(file_path: Path) -> DataStream:
     dsdata = np.load(file_path, allow_pickle=True)
-    stats = dsdata["stats"]
-    data = dsdata["data"]
     return DataStream(
-        stats=DataStreamStats(**stats),
-        data=data,
+        stats=dsdata["stats"].item(),
+        data=dsdata["data"],
     )
 
 
