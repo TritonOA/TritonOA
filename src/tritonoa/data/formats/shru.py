@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# TODO: Implement method to take channel input specification and return only that
+# channel's conditioning values.
+
 from array import array
 from dataclasses import dataclass
 from enum import Enum
@@ -459,7 +462,7 @@ class SHRUReader(base.BaseReader):
                 f"Incorrect number of gain or sensitivity values set: {e}"
                 f"len(gain)={len(conditioner.gain)}, "
                 f"len(sensitivity)={len(conditioner.sensitivity)}, "
-                f"len(channels)={data.shape[1]}."
+                f"len(channels)={data.shape[0]}."
                 f"Returning the data unconditioned."
             )
             return data, "counts"
