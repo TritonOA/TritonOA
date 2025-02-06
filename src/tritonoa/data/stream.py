@@ -225,7 +225,7 @@ class DataStream:
 
     def write(self, path: Path) -> None:
         """Writes data to file."""
-        np.savez(path, data=self.data, stats=self.stats)
+        np.savez(path, stats=self.stats, data=self.data)
 
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""

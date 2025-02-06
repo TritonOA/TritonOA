@@ -154,6 +154,16 @@ def read_inventory(
     return ds.trim(starttime=time_start, endtime=time_end)
 
 
+def read_numpy(file_path: Path) -> DataStream:
+    dsdata = np.load(file_path, allow_pickle=True)
+    stats = dsdata["stats"]
+    data = dsdata["data"]
+    return DataStream(
+        stats=DataStreamStats(**stats),
+        data=data,
+    )
+
+
 def read_data(file_path: Path, data_type: Optional[str] = None, **kwargs) -> DataStream:
     return factory.get_reader(file_path.suffix, data_type).read(file_path, **kwargs)
 
