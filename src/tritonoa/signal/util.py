@@ -27,7 +27,7 @@ def get_freqs_from_band(
         Frequencies within the band and their corresponding indices.
     """
     f = rfftfreq(n, d=1 / fs)
-    inds = np.argwhere((f > freq_band[0]) & (f < freq_band[1])).squeeze()
+    inds = np.argwhere((f >= freq_band[0]) & (f <= freq_band[1])).squeeze()
     return f[inds], inds
 
 
