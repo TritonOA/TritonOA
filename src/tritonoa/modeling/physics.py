@@ -15,7 +15,6 @@ def propagate_signal(
     signal: np.ndarray,
     greens_function: np.ndarray,
     freq: np.ndarray,
-    freq_inds: np.ndarray,
     t_offset: float = 0.0,
     nfft: Optional[int] = None,
 ) -> np.ndarray:
@@ -49,7 +48,7 @@ def propagate_signal(
     """
     X = rfft(signal, axis=-1)
     phase_offset = np.exp(1j * 2 * np.pi * freq * t_offset)
-    Y = X[..., freq_inds] * greens_function * phase_offset
+    Y = X * greens_function * phase_offset
     return irfft(Y, n=nfft, axis=-1)
 
 
