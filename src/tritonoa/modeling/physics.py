@@ -3,7 +3,11 @@
 from typing import Optional, Union
 
 import numpy as np
-from scipy.fft import irfft, rfft
+from scipy.fft import fft, ifft
+
+
+def expected_travel_time(range_m: float, max_speed: float = 1500.0) -> float:
+    return range_m / max_speed
 
 
 def group_speed_from_kr(freq: float, kr: float, c: float) -> float:
@@ -20,11 +24,9 @@ def propagate_signal(
 ) -> np.ndarray:
     """Propagate a signal through a medium.
 
-    `freq` and `freq_inds` are the frequencies of interest and their corresponding
-    indices, respectively. The signal is propagated by multiplying the signal's
-    Fourier transform by the Green's function and the phase offset. Typically,
-    not all frequencies are of interest, so only frequencies within a band
-    are considered.
+    The signal is propagated by multiplying the signal's Fourier transform
+    by the Green's function and the phase offset. Typically, not all frequencies
+    are of interest, so only frequencies within a band are considered.
 
     Parameters
     ----------
@@ -34,8 +36,6 @@ def propagate_signal(
         Green's function.
     freq : np.ndarray
         Array of frequencies of interest.
-    freq_inds : np.ndarray
-        Indices of the frequencies of interest.
     t_offset : float, optional
         Time offset, by default 0.0.
     nfft : Optional[int], optional
@@ -46,10 +46,10 @@ def propagate_signal(
     np.ndarray
         Propagated signal.
     """
-    X = rfft(signal, axis=-1)
+    X = fft(signal, axis=-1)
     phase_offset = np.exp(1j * 2 * np.pi * freq * t_offset)
     Y = X * greens_function * phase_offset
-    return irfft(Y, n=nfft, axis=-1)
+    return ifft(Y, n=nfft, axis=-1)
 
 
 def range_ind_pressure_from_modes(
