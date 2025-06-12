@@ -7,7 +7,7 @@ from enum import Enum
 import logging
 from pathlib import Path
 import struct
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 import warnings
 
 import numpy as np
@@ -158,8 +158,8 @@ class SHRUReader(base.BaseReader):
     def read(
         self,
         file_path: Path,
-        records: Optional[int | list[int]] = None,
-        channels: Optional[int | list[int]] = None,
+        records: int | list[int] = None,
+        channels: int | list[int] = None,
         clock: ClockParameters = ClockParameters(),
         conditioner: SignalParams = SignalParams(),
     ) -> DataStream:
@@ -200,8 +200,8 @@ class SHRUReader(base.BaseReader):
     def read_raw_data(
         self,
         file_path: Path,
-        records: Optional[int | list[int]] = None,
-        channels: Optional[int | list[int]] = None,
+        records: int | list[int] = None,
+        channels: int | list[int] = None,
     ) -> tuple[np.ndarray, SHRUHeader]:
         """Read 24-bit data from a SHRU file.
 
