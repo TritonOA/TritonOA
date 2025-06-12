@@ -59,11 +59,17 @@ class Inventory:
         glob_pattern: str = "*",
         clock_params: ClockParameters | None = None,
         conditioner: SignalParams | None = None,
+        file_format: str | None = None,
         record_fmt_callback: Callable | None = None,
     ) -> DataFrame:
         def _process_file(file):
-            reader = factory.get_reader(file.suffix)
-            formatter = factory.get_formatter(file.suffix)
+            if file_format is None:
+                reader = factory.get_reader(file.suffix)
+                formatter = factory.get_formatter(file.suffix)
+            else:
+                reader = factory.get_reader(file_format)
+                formatter = factory.get_formatter(file_format)
+
             headers = reader.read_headers(file)
 
             records_from_file = []
