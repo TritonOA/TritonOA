@@ -8,9 +8,9 @@ import scipy.fft as fft
 
 
 def double_to_single_sided_fft(
-    freqs: npt.NDArray[np.float_],
-    fft_values: npt.NDArray[np.complex_],
-) -> tuple[npt.NDArray[np.complex_], npt.NDArray[np.float_]]:
+    freqs: npt.NDArray[np.float64],
+    fft_values: npt.NDArray[np.complex128],
+) -> tuple[npt.NDArray[np.complex128], npt.NDArray[np.float64]]:
     """
     Convert a double-sided FFT to a properly scaled single-sided FFT.
     Efficiently handles both single-channel and multichannel FFT data.
@@ -67,11 +67,11 @@ def double_to_single_sided_fft(
 
 
 def double_to_single_sided_ifft(
-    time_values: npt.NDArray[np.float_],
-    ifft_values: npt.NDArray[np.complex_] | npt.NDArray[np.complexfloating],
+    time_values: npt.NDArray[np.float64],
+    ifft_values: npt.NDArray[np.complex128] | npt.NDArray[np.complexfloating],
     shift: bool = False,
 ) -> tuple[
-    npt.NDArray[np.complex_] | npt.NDArray[np.complexfloating], npt.NDArray[np.float_]
+    npt.NDArray[np.complex128] | npt.NDArray[np.complexfloating], npt.NDArray[np.float64]
 ]:
     """
     Extract the first half of the IFFT result for display or analysis purposes.
