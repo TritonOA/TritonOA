@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 
 # TODO: Clean up base class argument specs and returned types.
 

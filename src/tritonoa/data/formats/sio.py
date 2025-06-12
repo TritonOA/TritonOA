@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+
 
 # TODO: Place acknowledgement/license for SIOREAD here.
 
