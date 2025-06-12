@@ -35,7 +35,7 @@ def get_reader(
         file_format (Optional[str], optional): File format. Defaults to None.
 
     Returns:
-        tuple[callable, FileFormat]: Header reader and file format.
+        tuple[Callable, FileFormat]: Header reader and file format.
 
     Raises:
         ValueError: If file format is not recognized.

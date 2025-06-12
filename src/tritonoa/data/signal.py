@@ -1,5 +1,3 @@
-
-
 # TODO: Implement cupy support
 # try:
 # import cupyx.scipy.signal as signal
@@ -7,6 +5,7 @@
 # import scipy.signal as signal
 
 from dataclasses import dataclass
+from typing import Callable
 import warnings
 
 import numpy as np
@@ -73,7 +72,7 @@ def db_to_linear(dbgain: float | list[float]) -> float | list[float]:
     return 10.0 ** (dbgain / 20.0)
 
 
-def get_filter(filt_type: str) -> callable:
+def get_filter(filt_type: str) -> Callable:
     FILTER_REGISTRY = {
         "bandpass": bandpass,
         "bandstop": bandstop,

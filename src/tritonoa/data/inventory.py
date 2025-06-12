@@ -6,8 +6,9 @@ from enum import StrEnum
 from functools import partial
 import logging
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
+from polars import DataFrame
 import polars as pl
 from tqdm import tqdm
 import scipy.io
@@ -58,8 +59,8 @@ class Inventory:
         glob_pattern: str = "*",
         clock_params: ClockParameters | None = None,
         conditioner: SignalParams | None = None,
-        record_fmt_callback: callable | None = None,
-    ) -> pl.DataFrame:
+        record_fmt_callback: Callable | None = None,
+    ) -> DataFrame:
         def _process_file(file):
             reader = factory.get_reader(file.suffix)
             formatter = factory.get_formatter(file.suffix)
@@ -106,14 +107,14 @@ class Inventory:
         self.df = self._records_to_df()
         return self.df
 
-    def _format_df_for_csv(self, df: pl.DataFrame) -> pl.DataFrame:
+    def _format_df_for_csv(self, df: DataFrame) -> DataFrame:
         """Format Polars DataFrame for CSV output.
 
         Args:
-            df (pl.DataFrame): Polars DataFrame.
+            df (DataFrame): Polars DataFrame.
 
         Returns:
-            pl.DataFrame: Polars DataFrame.
+            DataFrame: Polars DataFrame.
         """
 
         def _to_list(lst: float | list) -> str:
@@ -141,7 +142,7 @@ class Inventory:
         logging.debug(f"{len(files)} files found for record inventory.")
         return files
 
-    def load(self, filepath: Path) -> pl.DataFrame:
+    def load(self, filepath: Path) -> DataFrame:
         """Load the record inventory from file.
 
         Args:
@@ -177,7 +178,7 @@ class Inventory:
         Returns:
             None
         """
-        self.df = pl.DataFrame.deserialize(filepath, format="binary")
+        self.df = DataFrame.deserialize(filepath, format="binary")
 
     def _read_csv(self, filepath: Path) -> None:
         """Read the record inventory from CSV file.
@@ -214,7 +215,7 @@ class Inventory:
         Returns:
             None
         """
-        self.df = pl.DataFrame.deserialize(filepath, format="json")
+        self.df = DataFrame.deserialize(filepath, format="json")
 
     def _read_mat(self, filepath: Path) -> None:
         """Read the record inventory from MAT file.
@@ -229,14 +230,14 @@ class Inventory:
         self.records = self._mdict_to_records(mdict)
         self.df = self._records_to_df()
 
-    def _records_to_df(self) -> pl.DataFrame:
+    def _records_to_df(self) -> DataFrame:
         """Convert records to Polars DataFrame.
 
         Returns:
-            pl.DataFrame: Polars DataFrame.
+            DataFrame: Polars DataFrame.
         """
         return (
-            pl.DataFrame(self._records_to_dfdict())
+            DataFrame(self._records_to_dfdict())
             .with_columns(pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)))
             .with_columns(pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)))
             .sort(by="timestamp")
