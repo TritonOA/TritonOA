@@ -10,14 +10,11 @@ import tritonoa.data.formats.base as base
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
-    TIME_CONVERSION_FACTOR,
     TIME_PRECISION,
     ClockParameters,
-    convert_to_datetime,
     correct_clock_drift,
     correct_sampling_rate,
 )
-from tritonoa.data.signal import db_to_linear
 
 
 class WHOI3DVHAFileFormat(base.FileFormatCheckerMixin, Enum):
@@ -290,7 +287,7 @@ class WHOI3DVHARecordFormatter(base.BaseRecordFormatter):
         clock: ClockParameters,
         conditioner: SignalParams,
     ):
-        conditioner.fill_like_channels(header.ch)
+        conditioner.fill_like_channels(header.channels)
         ts = header.datetime(precision=TIME_PRECISION)
         fs = header.sampling_rate
         return base.DataRecord(
