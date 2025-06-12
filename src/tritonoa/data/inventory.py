@@ -1,5 +1,3 @@
-
-
 # TODO: Replace hydrophone specs w/ signal params
 
 from concurrent.futures import ThreadPoolExecutor
@@ -58,9 +56,9 @@ class Inventory:
         self,
         dataset_path: Path,
         glob_pattern: str = "*",
-        clock_params: ClockParameters = ClockParameters(),
-        conditioner: SignalParams = SignalParams(),
-        record_fmt_callback: Optional[callable] = None,
+        clock_params: ClockParameters | None = None,
+        conditioner: SignalParams | None = None,
+        record_fmt_callback: callable | None = None,
     ) -> pl.DataFrame:
         def _process_file(file):
             reader = factory.get_reader(file.suffix)
@@ -86,10 +84,21 @@ class Inventory:
             logging.debug(f"{len(corrected_records)} records processed from {file}.")
             return corrected_records
 
+        if clock_params is None:
+            clock_params = ClockParameters()
+        if conditioner is None:
+            conditioner = SignalParams()
+
         files = self._get_files(dataset_path, glob_pattern)
 
         with ThreadPoolExecutor(max_workers=len(files)) as executor:
-            results = list(tqdm(executor.map(_process_file, files), total=len(files), desc="Processing files"))
+            results = list(
+                tqdm(
+                    executor.map(_process_file, files),
+                    total=len(files),
+                    desc="Processing files",
+                )
+            )
 
         records = []
         [records.extend(result) for result in results]
