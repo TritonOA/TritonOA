@@ -6,7 +6,7 @@ from enum import StrEnum
 from functools import partial
 import logging
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Protocol
 
 import polars as pl
 from tqdm import tqdm
@@ -47,7 +47,7 @@ class InventoryFileFormat(StrEnum):
 
 
 class Inventory:
-    def __init__(self, records: Optional[list[DataRecord]] = None):
+    def __init__(self, records: list[DataRecord] | None = None):
         self.records = records
         if records is not None:
             self.df = self._records_to_df()
