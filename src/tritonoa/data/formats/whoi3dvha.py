@@ -78,16 +78,8 @@ class WHOI3DVHAHeader:
 
 
 class WHOI3DVHAReader(base.BaseReader):
-    def read(self, file_path: Path):
-
-        with open(file_path, "rb") as fid:
-            fid.seek(0, 0)
-            header = self._read_header(fid)
-            raw_data = self.read_raw_data(
-                fid,
-                int(header.sampling_rate * header.record_length_secs),
-                header.channels,
-            )
+    def read(self, file_path: Path, channels: list[int] | None = None) -> DataStream:
+        raw_data, header = self.read_raw_data(file_path, channels=channels)
 
         return DataStream(
             stats=DataStreamStats(
@@ -98,7 +90,19 @@ class WHOI3DVHAReader(base.BaseReader):
             data=raw_data,
         )
 
-    def read_raw_data(self, fid, scans: int, channels: int):
+    def read_raw_data(
+        self, filename: Path, records: int = 0, channels: list[int] = None
+    ):
+        with open(filename, "rb") as fid:
+            fid.seek(0, 0)
+            header = self._read_header(fid)
+            scans = int(header.sampling_rate * header.record_length_secs)
+            data_array = self._read_raw_data(fid, scans, header.channels)
+            if channels is not None:
+                return data_array[channels, :], header
+            return data_array, header
+
+    def _read_raw_data(self, fid, scans: int, channels: int):
         total_values = int(channels * scans)
         data_array = data_array = np.fromfile(fid, dtype=np.float64, count=total_values)
         if len(data_array) < total_values:
@@ -252,7 +256,8 @@ class WHOI3DVHAReader(base.BaseReader):
             offset=offset,
         )
 
-    def condition_data(): ...
+    def condition_data(self, raw_data, *args, **kwargs):
+        return raw_data, None
 
 
 class WHOI3DVHARecordFormatter(base.BaseRecordFormatter):
