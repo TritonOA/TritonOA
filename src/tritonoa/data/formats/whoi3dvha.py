@@ -112,8 +112,7 @@ class WHOI3DVHAReader(base.BaseReader):
             list[SIOHeader]: Data record headers.
         """
         with open(filename, "rb") as f:
-            header, _, _ = self._read_header(filename)
-        return [header]
+            return [self._read_header(f)]
 
     @staticmethod
     def _read_header(file_obj):
