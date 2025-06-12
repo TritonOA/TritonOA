@@ -1,8 +1,8 @@
 from typing import Optional
 
-from tritonoa.data.formats.shru import SHRUReader, SHRURecordFormatter, SHRUFileFormat
-from tritonoa.data.formats.sio import SIOReader, SIOFileFormat
-from tritonoa.data.formats.whoi3dvha import WHOI3DVHAReader, WHOI3DVHAFileFormat
+from tritonoa.data.formats.shru import SHRUFileFormat, SHRUReader, SHRURecordFormatter
+from tritonoa.data.formats.sio import SIOFileFormat, SIOReader
+from tritonoa.data.formats.whoi3dvha import WHOI3DVHAFileFormat, WHOI3DVHAReader, WHOI3DVHARecordFormatter
 
 
 def get_file_format(
@@ -26,7 +26,7 @@ def get_formatter(
     if file_format == SIOFileFormat.FORMAT.value:
         return None
     if file_format == WHOI3DVHAFileFormat.FORMAT.value:
-        return None
+        return WHOI3DVHARecordFormatter()
     raise ValueError(f"File format {file_format} is not recognized.")
 
 

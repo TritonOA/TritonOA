@@ -69,6 +69,16 @@ class WHOI3DVHAHeader:
         )
         return np.datetime64(dt, precision)
 
+    @property
+    def num_samples(self) -> int:
+        """
+        Calculate the number of samples in the record.
+
+        Returns:
+            int: Number of samples in the record.
+        """
+        return int(self.sampling_rate * self.record_length_secs)
+
 
 class WHOI3DVHAReader(base.BaseReader):
     def read(self, file_path: Path):
@@ -246,3 +256,53 @@ class WHOI3DVHAReader(base.BaseReader):
         )
 
     def condition_data(): ...
+
+
+class WHOI3DVHARecordFormatter(base.BaseRecordFormatter):
+
+    file_format = "WHOI3DVHA"
+
+    @staticmethod
+    def callback(records: list[base.DataRecord]) -> list[base.DataRecord]:
+        """Format SHRU records.
+
+        The time stamp of the first record in the 4-channel SHRU files seem
+        to be rounded to seconds. This function corrects the time stamp of
+        the first record by calculating the time offset between the first
+        and second records using the number of points in the record and
+        the sampling rate.
+
+        Args:
+            records (list[Record]): List of records.
+
+        Returns:
+            list[Record]: List of records.
+        """
+        if len(records) == 1:
+            return records
+        return records
+
+    def format_record(
+        self,
+        filename: Path,
+        record_number: int,
+        header: WHOI3DVHAHeader,
+        clock: ClockParameters,
+        conditioner: SignalParams,
+    ):
+        conditioner.fill_like_channels(header.ch)
+        ts = header.datetime(precision=TIME_PRECISION)
+        fs = header.sampling_rate
+        return base.DataRecord(
+            filename=filename,
+            record_number=record_number,
+            file_format=self.file_format,
+            timestamp_orig=ts,
+            timestamp=correct_clock_drift(ts, clock),
+            sampling_rate_orig=fs,
+            sampling_rate=correct_sampling_rate(fs, clock.drift_rate),
+            npts=header.num_samples,
+            nch=header.channels,
+            gain=conditioner.gain,
+            sensitivity=conditioner.sensitivity,
+        )
