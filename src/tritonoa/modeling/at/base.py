@@ -1,5 +1,3 @@
-
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum

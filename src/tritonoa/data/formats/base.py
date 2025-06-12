@@ -1,5 +1,3 @@
-
-
 # TODO: Clean up base class argument specs and returned types.
 
 from abc import ABC, abstractmethod

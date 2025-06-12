@@ -1,5 +1,3 @@
-
-
 # TODO: Implement method to take channel input specification and return only that
 # channel's conditioning values.
 

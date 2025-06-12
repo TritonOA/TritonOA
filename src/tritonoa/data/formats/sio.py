@@ -1,5 +1,3 @@
-
-
 # TODO: Place acknowledgement/license for SIOREAD here.
 
 from dataclasses import dataclass

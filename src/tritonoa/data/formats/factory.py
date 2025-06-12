@@ -1,5 +1,3 @@
-
-
 from typing import Optional
 
 from tritonoa.data.formats.shru import SHRUReader, SHRURecordFormatter, SHRUFileFormat
