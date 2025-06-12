@@ -23,6 +23,10 @@ def get_formatter(
     file_format = get_file_format(suffix, file_format)
     if file_format == SHRUFileFormat.FORMAT.value:
         return SHRURecordFormatter()
+    if file_format == SIOFileFormat.FORMAT.value:
+        return None
+    if file_format == WHOI3DVHAFileFormat.FORMAT.value:
+        return None
     raise ValueError(f"File format {file_format} is not recognized.")
 
 
