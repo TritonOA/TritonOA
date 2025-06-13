@@ -3,10 +3,17 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 import struct
+from typing import BinaryIO
 
 import numpy as np
+import numpy.typing as npt
 
-import tritonoa.data.formats.base as base
+from tritonoa.data.formats.base import (
+    BaseReader,
+    BaseRecordFormatter,
+    DataRecord,
+    FileFormatCheckerMixin,
+)
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
@@ -17,7 +24,7 @@ from tritonoa.data.time import (
 )
 
 
-class WHOI3DVHAFileFormat(base.FileFormatCheckerMixin, Enum):
+class WHOI3DVHAFileFormat(FileFormatCheckerMixin, Enum):
     FORMAT = "WHOI3DVHA"
     BIN = ".BIN"
 
@@ -77,7 +84,7 @@ class WHOI3DVHAHeader:
         return int(self.sampling_rate * self.record_length_secs)
 
 
-class WHOI3DVHAReader(base.BaseReader):
+class WHOI3DVHAReader(BaseReader):
     def read(self, file_path: Path, channels: list[int] | None = None) -> DataStream:
         raw_data, header = self.read_raw_data(file_path, channels=channels)
 
@@ -91,8 +98,8 @@ class WHOI3DVHAReader(base.BaseReader):
         )
 
     def read_raw_data(
-        self, filename: Path, records: int = 0, channels: list[int] = None
-    ):
+        self, filename: Path, _, channels: list[int] = None
+    ) -> tuple[npt.NDArray[np.float64], WHOI3DVHAHeader]:
         with open(filename, "rb") as fid:
             fid.seek(0, 0)
             header = self._read_header(fid)
@@ -102,7 +109,9 @@ class WHOI3DVHAReader(base.BaseReader):
                 return data_array[channels, :], header
             return data_array, header
 
-    def _read_raw_data(self, fid, scans: int, channels: int):
+    def _read_raw_data(
+        self, fid: BinaryIO, scans: int, channels: int
+    ) -> npt.NDArray[np.float64]:
         total_values = int(channels * scans)
         data_array = data_array = np.fromfile(fid, dtype=np.float64, count=total_values)
         if len(data_array) < total_values:
@@ -126,9 +135,8 @@ class WHOI3DVHAReader(base.BaseReader):
             return [self._read_header(f)]
 
     @staticmethod
-    def _read_header(file_obj):
-        """
-        Extract the next record header from an open 3DAT binary data file.
+    def _read_header(fid: BinaryIO) -> WHOI3DVHAHeader:
+        """Extract the record header from an open 3DVHA binary data file.
 
         Args:
             file_obj: An open file object in binary read mode
@@ -139,133 +147,64 @@ class WHOI3DVHAReader(base.BaseReader):
         Raises:
             RuntimeError: If any part of the header cannot be read correctly
         """
-        try:
-            year = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading year in header")
 
-        try:
-            month = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading month in header")
+        # Define a helper function to read a single field
+        def read_field(format_str, field_name, count=1):
+            try:
+                data = fid.read(struct.calcsize(format_str) * count)
+                if len(data) < struct.calcsize(format_str) * count:
+                    raise RuntimeError(
+                        f"Failed to read {field_name}: unexpected end of file"
+                    )
 
-        try:
-            day = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading day in header")
+                if count == 1:
+                    return struct.unpack(format_str, data)[0]
+                else:
+                    return np.array(struct.unpack(f"{count}{format_str[0]}", data))
+            except Exception as e:
+                raise RuntimeError(f"Error reading {field_name} in header: {str(e)}")
 
-        try:
-            hour = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading hour in header")
+        header_fields = [
+            ("I", "year"),
+            ("I", "month"),
+            ("I", "day"),
+            ("I", "hour"),
+            ("I", "minute"),
+            ("I", "second"),
+            ("I", "channels"),
+            ("I", "sampling_rate"),  # Will be converted to float later
+            ("I", "bytes_per_channel"),
+            ("I", "record_length_secs"),  # Will be converted to float later
+            ("I", "records_per_file"),
+            ("I", "record_number"),
+            ("I", "record_data_bytes"),
+            ("I", "dataMask"),
+            ("I", "comp2Mask"),
+            ("i", "bit_shift"),  # Note: int32 (lowercase i)
+        ]
 
-        try:
-            minute = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading minute in header")
+        header_data = {name: read_field(fmt, name) for fmt, name in header_fields}
 
-        try:
-            second = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading second in header")
+        header_data["sampling_rate"] = float(header_data["sampling_rate"])
+        header_data["record_length_secs"] = float(header_data["record_length_secs"])
 
-        try:
-            channels = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading channels in header")
+        header_data["step"] = read_field("d", "step", count=8)
+        header_data["offset"] = read_field("d", "offset", count=8)
 
-        try:
-            sampling_rate = float(struct.unpack("I", file_obj.read(4))[0])
-        except:
-            raise RuntimeError("Error reading sampling_rate in header")
+        return WHOI3DVHAHeader(**header_data)
 
-        try:
-            bytes_per_channel = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading bytes_per_channel in header")
-
-        try:
-            record_length_secs = float(struct.unpack("I", file_obj.read(4))[0])
-        except:
-            raise RuntimeError("Error reading record_length_secs in header")
-
-        try:
-            records_per_file = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading records_per_file in header")
-
-        try:
-            record_number = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading record_number in header")
-
-        try:
-            record_data_bytes = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading record_data_bytes in header")
-
-        try:
-            dataMask = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading dataMask in header")
-
-        try:
-            comp2Mask = struct.unpack("I", file_obj.read(4))[0]
-        except:
-            raise RuntimeError("Error reading comp2Mask in header")
-
-        try:
-            bit_shift = struct.unpack("i", file_obj.read(4))[
-                0
-            ]  # Note: int32 (lowercase i)
-        except:
-            raise RuntimeError("Error reading bit_shift in header")
-
-        # Read arrays of doubles
-        try:
-            step_data = file_obj.read(8 * 8)  # 8 doubles, 8 bytes each
-            step = np.array(struct.unpack("8d", step_data))
-        except:
-            raise RuntimeError("Error reading steps in header")
-
-        try:
-            offset_data = file_obj.read(8 * 8)  # 8 doubles, 8 bytes each
-            offset = np.array(struct.unpack("8d", offset_data))
-        except:
-            raise RuntimeError("Error reading offsets in header")
-
-        # Create and return the RecordHeader data class instance
-        return WHOI3DVHAHeader(
-            year=year,
-            month=month,
-            day=day,
-            hour=hour,
-            minute=minute,
-            second=second,
-            channels=channels,
-            sampling_rate=sampling_rate,
-            bytes_per_channel=bytes_per_channel,
-            record_length_secs=record_length_secs,
-            records_per_file=records_per_file,
-            record_number=record_number,
-            record_data_bytes=record_data_bytes,
-            dataMask=dataMask,
-            comp2Mask=comp2Mask,
-            bit_shift=bit_shift,
-            step=step,
-            offset=offset,
-        )
-
-    def condition_data(self, raw_data, *args, **kwargs):
+    def condition_data(
+        self, raw_data: npt.NDArray, *args, **kwargs
+    ) -> tuple[npt.NDArray[np.float64], None]:
         return raw_data, None
 
 
-class WHOI3DVHARecordFormatter(base.BaseRecordFormatter):
+class WHOI3DVHARecordFormatter(BaseRecordFormatter):
 
     file_format = "WHOI3DVHA"
 
     @staticmethod
-    def callback(records: list[base.DataRecord]) -> list[base.DataRecord]:
+    def callback(records: list[DataRecord]) -> list[DataRecord]:
         """Format SHRU records.
 
         The time stamp of the first record in the 4-channel SHRU files seem
@@ -295,7 +234,7 @@ class WHOI3DVHARecordFormatter(base.BaseRecordFormatter):
         conditioner.fill_like_channels(header.channels)
         ts = header.datetime(precision=TIME_PRECISION)
         fs = header.sampling_rate
-        return base.DataRecord(
+        return DataRecord(
             filename=filename,
             record_number=record_number,
             file_format=self.file_format,
