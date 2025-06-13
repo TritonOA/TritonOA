@@ -2,7 +2,11 @@ from typing import Optional
 
 from tritonoa.data.formats.shru import SHRUFileFormat, SHRUReader, SHRURecordFormatter
 from tritonoa.data.formats.sio import SIOFileFormat, SIOReader
-from tritonoa.data.formats.whoi3dvha import WHOI3DVHAFileFormat, WHOI3DVHAReader, WHOI3DVHARecordFormatter
+from tritonoa.data.formats.whoi3dvha import (
+    WHOI3DVHAFileFormat,
+    WHOI3DVHAReader,
+    WHOI3DVHARecordFormatter,
+)
 
 
 def get_file_format(
