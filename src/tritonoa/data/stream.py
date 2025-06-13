@@ -1,5 +1,3 @@
-
-
 from __future__ import annotations
 
 from copy import copy, deepcopy
@@ -8,7 +6,6 @@ from enum import Enum
 import locale
 import math
 from pathlib import Path
-from typing import Optional
 import warnings
 
 import numpy as np
@@ -42,11 +39,12 @@ class DataFormat(Enum):
 
 @dataclass
 class DataStreamStats:
-    channels: Optional[int | list[int]] = None
-    time_init: Optional[float | np.datetime64] = None
-    time_end: Optional[float | np.datetime64] = None
-    sampling_rate: Optional[float] = None
-    units: Optional[str] = None
+    channels: int | list[int] | None = None
+    time_init: float | np.datetime64 | None = None
+    time_end: float | np.datetime64 | None = None
+    sampling_rate: float | None = None
+    units: str | None = None
+    metadata: dict | None = None
 
 
 class DataStream:
@@ -64,7 +62,7 @@ class DataStream:
     """
 
     def __init__(
-        self, stats: Optional[DataStreamStats] = None, data: Optional[np.ndarray] = None
+        self, stats: DataStreamStats | None = None, data: np.ndarray | None = None
     ) -> None:
         self.stats = stats
         self.data = data
@@ -212,8 +210,8 @@ class DataStream:
 
     def slice(
         self,
-        starttime: Optional[int | float | np.datetime64] = None,
-        endtime: Optional[int | float | np.datetime64] = None,
+        starttime: int | float | np.datetime64 | None = None,
+        endtime: int | float | np.datetime64 | None = None,
         nearest_sample: bool = True,
     ) -> DataStream:
         """Slices data by time."""
@@ -236,7 +234,7 @@ class DataStream:
     def decimate(
         self,
         factor: int,
-        n: Optional[int] = None,
+        n: int | None = None,
         ftype: str = "iir",
         zero_phase: bool = True,
     ) -> DataStream:
@@ -291,8 +289,8 @@ class DataStream:
 
     def trim(
         self,
-        starttime: Optional[int | float | np.datetime64] = None,
-        endtime: Optional[int | float | np.datetime64] = None,
+        starttime: int | float | np.datetime64 | None = None,
+        endtime: int | float | np.datetime64 | None = None,
         pad: bool = False,
         nearest_sample: bool = True,
         fill_value=None,
