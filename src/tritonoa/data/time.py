@@ -140,9 +140,11 @@ def datetime_linspace(start: np.datetime64, end: np.datetime64, num: int) -> np.
         f"datetime64[{TIME_PRECISION}]"
     )
 
-def datetime64_to_string(dt64: np.datetime64) -> str:
+def convert_datetime64_to_string(dt64: np.datetime64, readable: bool = False) -> str:
     """Convert numpy.datetime64 to string in 'YYYYMMDDTHHMMSS' format"""
     dt = dt64.astype(datetime)
+    if readable:
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
     return dt.strftime('%Y%m%dT%H%M%S')
 
 
