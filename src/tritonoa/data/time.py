@@ -1,6 +1,5 @@
-
-
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 import numpy as np
@@ -140,6 +139,11 @@ def datetime_linspace(start: np.datetime64, end: np.datetime64, num: int) -> np.
     return np.linspace(start_int, end_int, num, dtype="int64").astype(
         f"datetime64[{TIME_PRECISION}]"
     )
+
+def datetime64_to_string(dt64: np.datetime64) -> str:
+    """Convert numpy.datetime64 to string in 'YYYYMMDDTHHMMSS' format"""
+    dt = dt64.astype(datetime)
+    return dt.strftime('%Y%m%dT%H%M%S')
 
 
 def to_ydarray(list_of_datetimes: list[list[np.datetime64]]) -> np.ndarray:
