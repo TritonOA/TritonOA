@@ -84,12 +84,15 @@ def get_filter(filt_type: str) -> Callable:
 
 def bandpass(
     data: np.ndarray,
-    freqmin: float,
-    freqmax: float,
+    # freqmin: float,
+    # freqmax: float,
+    freq: tuple[float, float],
     fs: float,
     corners: int = 4,
     zerophase: bool = False,
 ) -> np.ndarray:
+    freqmin = freq[0]
+    freqmax = freq[1]
     fe = 0.5 * fs
     low = freqmin / fe
     high = freqmax / fe
