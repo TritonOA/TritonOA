@@ -98,7 +98,7 @@ class WHOI3DVHAReader(BaseReader):
         )
 
     def read_raw_data(
-        self, filename: Path, record: int = 1, channels: list[int] = None
+        self, filename: Path, records: int = 1, channels: list[int] = None
     ) -> tuple[npt.NDArray[np.float64], WHOI3DVHAHeader]:
         with open(filename, "rb") as fid:
             fid.seek(0, 0)
