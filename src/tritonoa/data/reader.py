@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import Optional
 import warnings
 
 import numpy as np
@@ -31,9 +30,10 @@ class NoDataError(Exception):
 
 def read_inventory(
     file_path: Path,
-    time_start: Optional[np.datetime64] = None,
-    time_end: Optional[np.datetime64] = None,
-    channels: Optional[int | list[int]] = None,
+    time_start: np.datetime64 | None = None,
+    time_end: np.datetime64 | None = None,
+    channels: int | list[int] = None,
+    metadata: dict | None = None,
     max_buffer: int = MAX_BUFFER,
 ) -> DataStream:
     """Reads data from inventory using the query parameters.
@@ -148,6 +148,7 @@ def read_inventory(
             time_end=time_stop,
             sampling_rate=sampling_rate,
             units=units,
+            metadata=metadata,
         ),
         data=waveform,
     )
@@ -162,7 +163,7 @@ def read_numpy(file_path: Path) -> DataStream:
     )
 
 
-def read_data(file_path: Path, data_type: Optional[str] = None, **kwargs) -> DataStream:
+def read_data(file_path: Path, data_type: str | None = None, **kwargs) -> DataStream:
     return factory.get_reader(file_path.suffix, data_type).read(file_path, **kwargs)
 
 
@@ -235,8 +236,8 @@ def _report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None
 
 def _select_records_by_time(
     df: pl.DataFrame,
-    time_start: Optional[np.datetime64] = None,
-    time_end: Optional[np.datetime64] = None,
+    time_start: np.datetime64 | None = None,
+    time_end: np.datetime64 | None = None,
 ) -> pl.DataFrame:
     """Select files by time."""
     logging.debug(f"Selecting records by time: {time_start} to {time_end}.")
