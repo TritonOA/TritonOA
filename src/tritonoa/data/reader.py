@@ -76,6 +76,11 @@ def read_inventory(
     timestamps = sorted(df.unique(subset=["filename"])["timestamp"].to_numpy())
     gains = df.unique(subset=["filename"])["gain"].to_list()
     sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()
+
+    if channels is not None:
+        gains = [gains[i] for i in channels]
+        sensitivities = [sensitivities[i] for i in channels]
+
     sampling_rates = (
         df.unique(subset=["filename"])
         .unique(subset=["sampling_rate"])["sampling_rate"]
