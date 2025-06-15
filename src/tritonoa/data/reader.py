@@ -1,5 +1,3 @@
-
-
 import logging
 from pathlib import Path
 import warnings
@@ -55,7 +53,27 @@ def read_inventory(
         return df.sort(by="timestamp").replace_column(
             0, pl.Series("row_nr", list(range(len(df))))
         )
-
+    
+    def _get_gains_and_sensitivities(df: pl.DataFrame) -> tuple[list[float], list[float]]:
+        gains = df.unique(subset=["filename"])["gain"].to_list()[0]
+        sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()[0]
+        if channels is not None:
+            gains = [gains[i] for i in channels]
+            sensitivities = [sensitivities[i] for i in channels]
+        return gains, sensitivities
+    
+    def _get_sampling_rate(df: pl.DataFrame) -> float:
+        sampling_rates = (
+            df.unique(subset=["filename"])
+            .unique(subset=["sampling_rate"])["sampling_rate"]
+            .to_list()
+        )
+        if len(set(sampling_rates)) > 1:
+            raise ValueError(
+                "Multiple sampling rates found in the inventory; unable to proceed."
+            )
+        return sampling_rates[0]
+    
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
@@ -65,7 +83,6 @@ def read_inventory(
         channels = [channels] if isinstance(channels, int) else channels
         num_channels = len(channels)
 
-    # num_channels = len(channels)
     if len(df) == 0:
         raise NoDataError("No data found for the given query parameters.")
     logging.debug(f"Reading {len(df)} records.")
@@ -74,24 +91,9 @@ def read_inventory(
         Path(f) for f in sorted(df.unique(subset=["filename"])["filename"].to_list())
     ]
     timestamps = sorted(df.unique(subset=["filename"])["timestamp"].to_numpy())
-    gains = df.unique(subset=["filename"])["gain"].to_list()
-    sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()
-
-    if channels is not None:
-        gains = [gains[i] for i in channels]
-        sensitivities = [sensitivities[i] for i in channels]
-
-    sampling_rates = (
-        df.unique(subset=["filename"])
-        .unique(subset=["sampling_rate"])["sampling_rate"]
-        .to_list()
-    )
-    if len(set(sampling_rates)) > 1:
-        raise ValueError(
-            "Multiple sampling rates found in the inventory; unable to proceed."
-        )
-    sampling_rate = sampling_rates[0]
-
+    gains, sensitivities = _get_gains_and_sensitivities(df)
+    sampling_rate = _get_sampling_rate(df)
+    
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
     logging.debug(f"Initializing buffer...")
     waveform = -2009.0 * np.ones((num_channels, expected_buffer), dtype=np.float64)
