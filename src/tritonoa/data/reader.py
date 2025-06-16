@@ -53,15 +53,17 @@ def read_inventory(
         return df.sort(by="timestamp").replace_column(
             0, pl.Series("row_nr", list(range(len(df))))
         )
-    
-    def _get_gains_and_sensitivities(df: pl.DataFrame) -> tuple[list[float], list[float]]:
+
+    def _get_gains_and_sensitivities(
+        df: pl.DataFrame,
+    ) -> tuple[list[float], list[float]]:
         gains = df.unique(subset=["filename"])["gain"].to_list()[0]
         sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()[0]
         if channels is not None:
             gains = [gains[i] for i in channels]
             sensitivities = [sensitivities[i] for i in channels]
         return gains, sensitivities
-    
+
     def _get_sampling_rate(df: pl.DataFrame) -> float:
         sampling_rates = (
             df.unique(subset=["filename"])
@@ -73,7 +75,7 @@ def read_inventory(
                 "Multiple sampling rates found in the inventory; unable to proceed."
             )
         return sampling_rates[0]
-    
+
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
@@ -93,11 +95,11 @@ def read_inventory(
     timestamps = sorted(df.unique(subset=["filename"])["timestamp"].to_numpy())
     gains, sensitivities = _get_gains_and_sensitivities(df)
     sampling_rate = _get_sampling_rate(df)
-    
+
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
     logging.debug(f"Initializing buffer...")
     waveform = -2009.0 * np.ones((num_channels, expected_buffer), dtype=np.float64)
-    logging.debug(f"Buffer initialized.")
+    logging.debug(f"Buffer initialized: {waveform.shape}.")
 
     marker = 0
     time_init = None
@@ -138,17 +140,18 @@ def read_inventory(
         logging.debug(f"Conditioned data shape: {raw_data.shape}.")
         # Store data in waveform & advance marker by data length:
         waveform[:, marker : marker + data.shape[1]] = data
+        logging.debug(f"Old marker at {marker}.")
         marker += data.shape[1]
+        logging.debug(f"New marker at {marker}.")
         # Compute time of last point in waveform:
         time_stop = timestamp + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * data.shape[1] / sampling_rate), TIME_PRECISION
         )
 
     if marker < expected_buffer:
-        waveform = waveform[:marker]
+        waveform = waveform[:, :marker]
 
-    # return
-    ds = DataStream(
+    return DataStream(
         stats=DataStreamStats(
             channels=channels,
             time_init=time_init,
@@ -158,8 +161,7 @@ def read_inventory(
             metadata=metadata,
         ),
         data=waveform,
-    )
-    return ds.trim(starttime=time_start, endtime=time_end)
+    ).trim(starttime=time_start, endtime=time_end)
 
 
 def read_numpy(file_path: Path) -> DataStream:
