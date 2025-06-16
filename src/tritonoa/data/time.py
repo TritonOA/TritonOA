@@ -30,6 +30,85 @@ class ClockParameters:
         return offset_diff / days_diff if days_diff != 0 else 0.0
 
 
+def convert_datetime64_to_pldatetime(np_datetime64: np.datetime64) -> str:
+    """Convert numpy.datetime64 to Polars datetime."""
+    np_datetime64_us = np_datetime64.astype(f"datetime64[{TIME_PRECISION}]")
+    int64_us = np.int64(np_datetime64_us.view("int64"))
+    return pl.lit(int64_us).cast(pl.Datetime(TIME_PRECISION))
+
+
+def convert_datetime64_to_iso(dt64: np.datetime64) -> str:
+    """Convert numpy.datetime64 to string in 'YYYY-MM-DDTHH:MM:SS.f' format"""
+    return np.datetime_as_string(dt64, unit="us").tolist()
+
+
+def convert_datetime64_to_string(dt64: np.datetime64, readable: bool = False) -> str:
+    """Convert numpy.datetime64 to string in 'YYYYMMDDTHHMMSS' format"""
+    dt = dt64.astype(datetime)
+    if readable:
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%Y%m%dT%H%M%S")
+
+
+def convert_dtarray_to_ydarray(
+    list_of_datetimes: list[list[np.datetime64]],
+) -> np.ndarray:
+    """Convert list of datetimes to 3D array.
+
+    This function is required to convert to the .MAT 'FileInfo' structure.
+
+    Args:
+        list_of_datetimes (list[list[np.datetime64]]): List of datetimes.
+
+    Returns:
+        np.ndarray: 3D array of datetimes with dimensions (2 x M x N),
+        where the first axis elements are the year and year-day, M is
+        the number of records in each file, and N is the number of files.
+    """
+    L = 2
+    M = max(len(dt) for dt in list_of_datetimes)
+    N = len(list_of_datetimes)
+    arr = np.zeros((L, M, N), dtype=np.float64)
+
+    for i, dt in enumerate(list_of_datetimes):
+        for j, d in enumerate(dt):
+            year, yd_decimal = convert_timestamp_to_yyd(d)
+            arr[0, j, i] = year
+            arr[1, j, i] = yd_decimal
+
+    return arr
+
+
+def convert_ints_to_datetime(
+    year: int, yd: int, minute: int, millisec: int, microsec: int
+) -> np.datetime64:
+    """Converts year, year-day, minute, millisecond, and microsecond to a timestamp.
+
+    Args:
+        year (int): Year.
+        yd (int): Year-day.
+        minute (int): Minute.
+        millisec (int): Millisecond.
+        microsec (int): Microsecond.
+
+    Returns:
+        np.datetime64: Timestamp.
+    """
+    base_date = np.datetime64(f"{year}-01-01")
+    return (
+        base_date
+        + np.timedelta64(yd - 1, "D")
+        + np.timedelta64(minute, "m")
+        + np.timedelta64(millisec, "ms")
+        + np.timedelta64(microsec, "us")
+    )
+
+
+def convert_pldatetime_to_datetime64(pl_datetime: pl.Series) -> list[np.datetime64]:
+    int64_us = pl_datetime.cast(pl.Int64)
+    return np.datetime64(int64_us, TIME_PRECISION)
+
+
 def convert_timestamp_to_yyd(timestamp: np.datetime64) -> tuple[int, float]:
     """Converts a timestamp to year and year-day fraction.
 
@@ -60,31 +139,6 @@ def convert_yydfrac_to_timestamp(year: int, yd: float) -> np.datetime64:
     fraction = yd - day
     rmndr = int(fraction * 24 * 60 * 60 * TIME_CONVERSION_FACTOR)
     return base_date + np.timedelta64(day, "D") + np.timedelta64(rmndr, "us")
-
-
-def convert_to_datetime(
-    year: int, yd: int, minute: int, millisec: int, microsec: int
-) -> np.datetime64:
-    """Converts year, year-day, minute, millisecond, and microsecond to a timestamp.
-
-    Args:
-        year (int): Year.
-        yd (int): Year-day.
-        minute (int): Minute.
-        millisec (int): Millisecond.
-        microsec (int): Microsecond.
-
-    Returns:
-        np.datetime64: Timestamp.
-    """
-    base_date = np.datetime64(f"{year}-01-01")
-    return (
-        base_date
-        + np.timedelta64(yd - 1, "D")
-        + np.timedelta64(minute, "m")
-        + np.timedelta64(millisec, "ms")
-        + np.timedelta64(microsec, "us")
-    )
 
 
 def correct_sampling_rate(fs: float, drift_rate: float) -> float:
@@ -122,54 +176,9 @@ def correct_clock_drift(
     )
 
 
-def convert_datetime64_to_pldatetime(np_datetime64: np.datetime64) -> str:
-    np_datetime64_us = np_datetime64.astype(f"datetime64[{TIME_PRECISION}]")
-    int64_us = np.int64(np_datetime64_us.view("int64"))
-    return pl.lit(int64_us).cast(pl.Datetime(TIME_PRECISION))
-
-
-def convert_pldatetime_to_datetime64(pl_datetime: pl.Series) -> list[np.datetime64]:
-    int64_us = pl_datetime.cast(pl.Int64)
-    return np.datetime64(int64_us, TIME_PRECISION)
-
-
 def datetime_linspace(start: np.datetime64, end: np.datetime64, num: int) -> np.ndarray:
     start_int = start.astype("int64")
     end_int = end.astype("int64")
     return np.linspace(start_int, end_int, num, dtype="int64").astype(
         f"datetime64[{TIME_PRECISION}]"
     )
-
-def convert_datetime64_to_string(dt64: np.datetime64, readable: bool = False) -> str:
-    """Convert numpy.datetime64 to string in 'YYYYMMDDTHHMMSS' format"""
-    dt = dt64.astype(datetime)
-    if readable:
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
-    return dt.strftime('%Y%m%dT%H%M%S')
-
-
-def to_ydarray(list_of_datetimes: list[list[np.datetime64]]) -> np.ndarray:
-    """Convert list of datetimes to 3D array.
-
-    This function is required to convert to the .MAT 'FileInfo' structure.
-
-    Args:
-        list_of_datetimes (list[list[np.datetime64]]): List of datetimes.
-
-    Returns:
-        np.ndarray: 3D array of datetimes with dimensions (2 x M x N),
-        where the first axis elements are the year and year-day, M is
-        the number of records in each file, and N is the number of files.
-    """
-    L = 2
-    M = max(len(dt) for dt in list_of_datetimes)
-    N = len(list_of_datetimes)
-    arr = np.zeros((L, M, N), dtype=np.float64)
-
-    for i, dt in enumerate(list_of_datetimes):
-        for j, d in enumerate(dt):
-            year, yd_decimal = convert_timestamp_to_yyd(d)
-            arr[0, j, i] = year
-            arr[1, j, i] = yd_decimal
-
-    return arr

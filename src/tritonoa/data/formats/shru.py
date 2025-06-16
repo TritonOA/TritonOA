@@ -19,7 +19,7 @@ from tritonoa.data.time import (
     TIME_CONVERSION_FACTOR,
     TIME_PRECISION,
     ClockParameters,
-    convert_to_datetime,
+    convert_ints_to_datetime,
     correct_clock_drift,
     correct_sampling_rate,
 )
@@ -616,4 +616,4 @@ def _get_timestamp(header: SHRUHeader) -> np.datetime64:
     minute = header.time[0]
     millisec = header.time[1]
     microsec = header.microsec
-    return convert_to_datetime(year, yd, minute, millisec, microsec)
+    return convert_ints_to_datetime(year, yd, minute, millisec, microsec)

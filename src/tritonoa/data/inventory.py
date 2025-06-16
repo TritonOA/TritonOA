@@ -20,7 +20,7 @@ from tritonoa.data.time import (
     TIME_PRECISION,
     ClockParameters,
     convert_yydfrac_to_timestamp,
-    to_ydarray,
+    convert_dtarray_to_ydarray,
 )
 
 
@@ -363,8 +363,8 @@ class Inventory:
         return {
             self.records[0].file_format: {
                 "filenames": filenames,
-                "timestamps": to_ydarray(timestamps),
-                "timestamps_orig": to_ydarray(timestamps_orig),
+                "timestamps": convert_dtarray_to_ydarray(timestamps),
+                "timestamps_orig": convert_dtarray_to_ydarray(timestamps_orig),
                 "rhfs_orig": self.records[0].sampling_rate_orig,
                 "rhfs": self.records[0].sampling_rate,
                 "gain": self.records[0].gain,
