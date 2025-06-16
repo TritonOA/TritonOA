@@ -10,9 +10,9 @@ import warnings
 
 import numpy as np
 import scipy
-import scipy.signal as signal
+import scipy.signal as sp
 
-from tritonoa.data.signal import get_filter
+from tritonoa.data.signal import get_filter, pulse_compression
 from tritonoa.data.time import (
     TIME_CONVERSION_FACTOR,
     TIME_PRECISION,
@@ -251,7 +251,7 @@ class DataStream:
             DataStream: Decimated data stream.
         """
 
-        self.data = signal.decimate(
+        self.data = sp.decimate(
             self.data, factor, n=n, ftype=ftype, axis=1, zero_phase=zero_phase
         )
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
@@ -286,6 +286,26 @@ class DataStream:
                 _max[i] = _min[i]
 
         return _max.squeeze()
+
+    def pulse_compression(
+        self,
+        transmitted_signal: np.ndarray,
+        mode: str = "same",
+    ) -> DataStream:
+        """Trims data by time.
+
+        NOTE: This function and its derivatives modify the object in place.
+        received_signal = self.data
+
+        Args:
+            transmitted_signal (np.ndarray): The pulse to use for compression.
+        Returns:
+            np.ndarray: The pulse-compressed data.
+        """
+        self.data = pulse_compression(
+            transmitted_signal, self.data, mode=mode
+        )
+        return self
 
     def trim(
         self,

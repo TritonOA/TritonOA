@@ -9,7 +9,7 @@ from typing import Callable
 import warnings
 
 import numpy as np
-import scipy.signal as signal
+import scipy.signal as sp
 
 
 @dataclass
@@ -109,14 +109,14 @@ def bandpass(
             f"Selected low corner frequency ({freqmin}) of bandpass is above Nyquist ({fe})."
         )
 
-    z, p, k = signal.iirfilter(
+    z, p, k = sp.iirfilter(
         corners, [low, high], btype="band", ftype="butter", output="zpk"
     )
-    sos = signal.zpk2sos(z, p, k)
+    sos = sp.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=1)
-        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
-    return signal.sosfilt(sos, data, axis=1)
+        firstpass = sp.sosfilt(sos, data, axis=1)
+        return sp.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return sp.sosfilt(sos, data, axis=1)
 
 
 def bandstop(
@@ -142,14 +142,14 @@ def bandstop(
         raise ValueError(
             f"Selected low corner frequency ({freqmin}) is above Nyquist ({fe})."
         )
-    z, p, k = signal.iirfilter(
+    z, p, k = sp.iirfilter(
         corners, [low, high], btype="bandstop", ftype="butter", output="zpk"
     )
-    sos = signal.zpk2sos(z, p, k)
+    sos = sp.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=1)
-        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
-    return signal.sosfilt(sos, data, axis=1)
+        firstpass = sp.sosfilt(sos, data, axis=1)
+        return sp.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return sp.sosfilt(sos, data, axis=1)
 
 
 def highpass(
@@ -164,14 +164,14 @@ def highpass(
     if f > 1:
         raise ValueError(f"Selected corner frequency ({freq}) is above Nyquist ({fe}).")
 
-    z, p, k = signal.iirfilter(
+    z, p, k = sp.iirfilter(
         corners, f, btype="highpass", ftype="butter", output="zpk"
     )
-    sos = signal.zpk2sos(z, p, k)
+    sos = sp.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=1)
-        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
-    return signal.sosfilt(sos, data, axis=1)
+        firstpass = sp.sosfilt(sos, data, axis=1)
+        return sp.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return sp.sosfilt(sos, data, axis=1)
 
 
 def lowpass(
@@ -192,11 +192,31 @@ def lowpass(
             )
         )
 
-    z, p, k = signal.iirfilter(
+    z, p, k = sp.iirfilter(
         corners, f, btype="lowpass", ftype="butter", output="zpk"
     )
-    sos = signal.zpk2sos(z, p, k)
+    sos = sp.zpk2sos(z, p, k)
     if zerophase:
-        firstpass = signal.sosfilt(sos, data, axis=1)
-        return signal.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
-    return signal.sosfilt(sos, data, axis=1)
+        firstpass = sp.sosfilt(sos, data, axis=1)
+        return sp.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
+    return sp.sosfilt(sos, data, axis=1)
+
+
+def pulse_compression(
+    transmitted_signal: np.ndarray,
+    received_signal: np.ndarray,
+    mode: str = "same",
+) -> np.ndarray:
+    """Applies pulse compression to the data using the given pulse.
+
+    Args:
+        transmitted_signal (np.ndarray): The pulse to use for compression.
+        received_signal (np.ndarray): The data to be pulse compressed.
+    Returns:
+        np.ndarray: The pulse-compressed data.
+    """
+    transmitted_signal = np.squeeze(transmitted_signal)
+    received_signal = np.atleast_2d(received_signal)
+    M, _ = received_signal.shape
+    matched_filter = np.tile(np.conj(transmitted_signal[::-1]), (M, 1))
+    return sp.fftconvolve(received_signal, matched_filter, mode=mode, axes=1)
