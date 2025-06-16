@@ -1,7 +1,9 @@
+import json
 import logging
 from pathlib import Path
 import warnings
 
+import h5py
 import numpy as np
 import polars as pl
 
@@ -163,6 +165,49 @@ def read_inventory(
         ),
         data=waveform,
     ).trim(starttime=time_start, endtime=time_end)
+
+
+def read_hdf5(path: Path) -> DataStream:
+    """
+    Reads data from an HDF5 file and returns a DataStream object.
+
+    Args:
+        path (Path): Path to the HDF5 file.
+
+    Returns:
+        DataStream: Data stream object with loaded data and statistics.
+    """
+    with h5py.File(path, "r") as f:
+        data = f["data"][:]
+
+        stats_dict = {}
+        for key in [
+            "channels",
+            "time_init",
+            "time_end",
+            "sampling_rate",
+            "units",
+            "metadata",
+        ]:
+            if key in f.attrs:
+                value = f.attrs[key]
+                # Handle possible JSON serialized values
+                if isinstance(value, str) and (
+                    value.startswith("{") or value.startswith("[") or value == "null"
+                ):
+                    try:
+                        stats_dict[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        stats_dict[key] = value
+                else:
+                    stats_dict[key] = value
+
+        # Convert ISO datetime strings back to np.datetime64
+        for dt_key in ["time_init", "time_end"]:
+            if dt_key in stats_dict:
+                stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
+
+        return DataStream(stats=DataStreamStats(**stats_dict), data=data)
 
 
 def read_numpy(file_path: Path) -> DataStream:

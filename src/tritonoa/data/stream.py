@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from copy import copy, deepcopy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
+import json
 import locale
 import math
 from pathlib import Path
 import warnings
 
+import h5py
 import numpy as np
 import scipy
 import scipy.signal as sp
@@ -17,6 +19,7 @@ from tritonoa.data.time import (
     TIME_CONVERSION_FACTOR,
     TIME_PRECISION,
     datetime_linspace,
+    convert_datetime64_to_iso,
 )
 from tritonoa.data.util import create_empty_data_chunk, round_away
 
@@ -113,14 +116,15 @@ class DataStream:
     def __repr__(self) -> str:
         """Returns string representation of the object."""
         return (
-            f"DataStream(data={self.data}, "
-            f"channels={self.stats.channels}, "
-            f"num_channels={self.num_channels}, "
-            f"num_samples={self.num_samples}, "
-            f"time_init={self.stats.time_init}, "
-            f"time_end={self.stats.time_end}, "
-            f"sampling_rate={self.stats.sampling_rate}), "
-            f"units={self.stats.units}"
+            f"DataStream(data={self.data}\n"
+            f"channels={self.stats.channels}\n"
+            f"num_channels={self.num_channels}\n"
+            f"num_samples={self.num_samples}\n"
+            f"time_init={self.stats.time_init}\n"
+            f"time_end={self.stats.time_end}\n"
+            f"sampling_rate={self.stats.sampling_rate}\n"
+            f"units={self.stats.units}\n"
+            f"metadata={self.stats.metadata})"
         )
 
     @property
@@ -225,6 +229,20 @@ class DataStream:
         """Writes data to file."""
         np.savez(path, stats=self.stats, data=self.data)
 
+    def write_hdf5(self, path: Path) -> None:
+        """Writes data to HDF5 file."""
+        with h5py.File(path, "w") as f:
+            f.create_dataset("data", data=self.data)
+            f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
+            for key, value in asdict(self.stats).items():
+                match value:
+                    case np.datetime64():
+                        f.attrs[key] = convert_datetime64_to_iso(value)
+                    case int() | float() | str() | bool():
+                        f.attrs[key] = value
+                    case _:
+                        f.attrs[key] = json.dumps(value)
+
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""
         scipy.io.wavfile.write(
@@ -302,9 +320,7 @@ class DataStream:
         Returns:
             np.ndarray: The pulse-compressed data.
         """
-        self.data = pulse_compression(
-            transmitted_signal, self.data, mode=mode
-        )
+        self.data = pulse_compression(transmitted_signal, self.data, mode=mode)
         return self
 
     def trim(
