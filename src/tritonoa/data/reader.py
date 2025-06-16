@@ -56,13 +56,14 @@ def read_inventory(
 
     def _get_gains_and_sensitivities(
         df: pl.DataFrame,
+        num_timestamps: int,
     ) -> tuple[list[float], list[float]]:
         gains = df.unique(subset=["filename"])["gain"].to_list()[0]
         sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()[0]
         if channels is not None:
             gains = [gains[i] for i in channels]
             sensitivities = [sensitivities[i] for i in channels]
-        return gains, sensitivities
+        return [gains] * num_timestamps, [sensitivities] * num_timestamps
 
     def _get_sampling_rate(df: pl.DataFrame) -> float:
         sampling_rates = (
@@ -93,7 +94,7 @@ def read_inventory(
         Path(f) for f in sorted(df.unique(subset=["filename"])["filename"].to_list())
     ]
     timestamps = sorted(df.unique(subset=["filename"])["timestamp"].to_numpy())
-    gains, sensitivities = _get_gains_and_sensitivities(df)
+    gains, sensitivities = _get_gains_and_sensitivities(df, len(timestamps))
     sampling_rate = _get_sampling_rate(df)
 
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
