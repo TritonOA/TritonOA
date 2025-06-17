@@ -5,7 +5,7 @@
 # import scipy.signal as signal
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterable
 import warnings
 
 import numpy as np
@@ -84,15 +84,12 @@ def get_filter(filt_type: str) -> Callable:
 
 def bandpass(
     data: np.ndarray,
-    # freqmin: float,
-    # freqmax: float,
-    freq: tuple[float, float],
+    freq: Iterable[float, float],
     fs: float,
     corners: int = 4,
     zerophase: bool = False,
 ) -> np.ndarray:
-    freqmin = freq[0]
-    freqmax = freq[1]
+    freqmin, freqmax = freq
     fe = 0.5 * fs
     low = freqmin / fe
     high = freqmax / fe
@@ -121,12 +118,12 @@ def bandpass(
 
 def bandstop(
     data: np.ndarray,
-    freqmin: float,
-    freqmax: float,
+    freq: Iterable[float, float],
     fs: float,
     corners: int = 4,
     zerophase: bool = False,
 ) -> np.ndarray:
+    freqmin, freqmax = freq
     fe = 0.5 * fs
     low = freqmin / fe
     high = freqmax / fe

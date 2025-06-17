@@ -7,6 +7,7 @@ import json
 import locale
 import math
 from pathlib import Path
+from typing import Iterable
 import warnings
 
 import h5py
@@ -275,7 +276,7 @@ class DataStream:
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
         return self
 
-    def filter(self, filt_type: str, **kwargs) -> DataStream:
+    def filter(self, filt_type: str, freq: float | Iterable[float], **kwargs) -> DataStream:
         """Filters data.
 
         Args:
@@ -287,7 +288,7 @@ class DataStream:
             DataStream: Filtered data stream.
         """
         func = get_filter(filt_type)
-        self.data = func(data=self.data, fs=self.stats.sampling_rate, **kwargs)
+        self.data = func(self.data, freq, self.stats.sampling_rate, **kwargs)
         return self
 
     def max(self) -> np.ndarray:
