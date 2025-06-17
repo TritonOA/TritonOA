@@ -191,6 +191,18 @@ class DataStream:
     def copy(self) -> DataStream:
         return deepcopy(self)
 
+    def create_hdf5_dataset(self, f: File | Group) -> None:
+        f.create_dataset("data", data=self.data)
+        f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
+        for key, value in asdict(self.stats).items():
+            match value:
+                case np.datetime64():
+                    f.attrs[key] = convert_datetime64_to_iso(value)
+                case int() | float() | str() | bool():
+                    f.attrs[key] = value
+                case _:
+                    f.attrs[key] = json.dumps(value)
+
     def decimate(
         self,
         factor: int,
@@ -324,34 +336,12 @@ class DataStream:
         """Writes data to HDF5 file."""
         with File(path, "w") as f:
             self.create_hdf5_dataset(f)
-            # f.create_dataset("data", data=self.data)
-            # f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
-            # for key, value in asdict(self.stats).items():
-            #     match value:
-            #         case np.datetime64():
-            #             f.attrs[key] = convert_datetime64_to_iso(value)
-            #         case int() | float() | str() | bool():
-            #             f.attrs[key] = value
-            #         case _:
-            #             f.attrs[key] = json.dumps(value)
 
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""
         scipy.io.wavfile.write(
             path, int(self.stats.sampling_rate), self.data.astype(np.int32)
         )
-
-    def create_hdf5_dataset(self, f: File | Group) -> None:
-        f.create_dataset("data", data=self.data)
-        f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
-        for key, value in asdict(self.stats).items():
-            match value:
-                case np.datetime64():
-                    f.attrs[key] = convert_datetime64_to_iso(value)
-                case int() | float() | str() | bool():
-                    f.attrs[key] = value
-                case _:
-                    f.attrs[key] = json.dumps(value)
 
     def _ltrim(
         self,
