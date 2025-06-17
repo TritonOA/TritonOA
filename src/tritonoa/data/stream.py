@@ -88,28 +88,6 @@ class DataStream:
             data = np.atleast_2d(self.data[index])
         return DataStream(stats=stats, data=data)
 
-    def _post_init(self):
-        """Initializes data and time vector."""
-        # TODO: Need to improve this - does not handle edge cases properly.
-        # Set time_init to 0 if not provided
-        if self.stats.time_init is None:
-            self.stats.time_init = np.timedelta64(0, "us")
-
-        # Compute sampling rate if time_init and time_end are provided
-        if self.stats.time_end is not None and self.stats.sampling_rate is None:
-            self.stats.sampling_rate = (
-                self.stats.time_end - self.stats.time_init
-            ) / self.num_samples
-
-        # Set time_end if time_init and sampling rate are provided
-        if self.stats.time_end is None and self.stats.sampling_rate is not None:
-            self.stats.time_end = self.stats.time_init + np.timedelta64(
-                int(
-                    TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate
-                ),
-                TIME_PRECISION,
-            )
-
     def __len__(self) -> int:
         """Returns length of data."""
         return self.num_samples
@@ -163,23 +141,6 @@ class DataStream:
         return self.data.shape[1]
 
     @property
-    def time_vector(self) -> np.ndarray:
-        """Returns time vector.
-
-        Returns:
-            np.ndarray: Time vector.
-
-        Raises:
-            NoDataWarning: If no data is found in the object.
-        """
-        if self.data is None:
-            warnings.warn("No data in variable 'X'.", NoDataWarning)
-            return None
-        return datetime_linspace(
-            start=self.stats.time_init, end=self.stats.time_end, num=self.num_samples
-        )
-
-    @property
     def seconds(self) -> np.ndarray:
         """Returns time vector in seconds.
 
@@ -210,45 +171,25 @@ class DataStream:
             return None
         return self.data.shape
 
+    @property
+    def time_vector(self) -> np.ndarray:
+        """Returns time vector.
+
+        Returns:
+            np.ndarray: Time vector.
+
+        Raises:
+            NoDataWarning: If no data is found in the object.
+        """
+        if self.data is None:
+            warnings.warn("No data in variable 'X'.", NoDataWarning)
+            return None
+        return datetime_linspace(
+            start=self.stats.time_init, end=self.stats.time_end, num=self.num_samples
+        )
+
     def copy(self) -> DataStream:
         return deepcopy(self)
-
-    def slice(
-        self,
-        starttime: int | float | np.datetime64 | None = None,
-        endtime: int | float | np.datetime64 | None = None,
-        nearest_sample: bool = True,
-    ) -> DataStream:
-        """Slices data by time."""
-        ds = copy(self)
-        ds.stats = deepcopy(self.stats)
-        return ds.trim(
-            starttime=starttime, endtime=endtime, nearest_sample=nearest_sample
-        )
-
-    def write(self, path: Path) -> None:
-        """Writes data to file."""
-        np.savez(path, stats=self.stats, data=self.data)
-
-    def write_hdf5(self, path: Path) -> None:
-        """Writes data to HDF5 file."""
-        with h5py.File(path, "w") as f:
-            f.create_dataset("data", data=self.data)
-            f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
-            for key, value in asdict(self.stats).items():
-                match value:
-                    case np.datetime64():
-                        f.attrs[key] = convert_datetime64_to_iso(value)
-                    case int() | float() | str() | bool():
-                        f.attrs[key] = value
-                    case _:
-                        f.attrs[key] = json.dumps(value)
-
-    def write_wav(self, path: Path) -> None:
-        """Writes data to WAV file."""
-        scipy.io.wavfile.write(
-            path, int(self.stats.sampling_rate), self.data.astype(np.int32)
-        )
 
     def decimate(
         self,
@@ -276,7 +217,9 @@ class DataStream:
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
         return self
 
-    def filter(self, filt_type: str, freq: float | Iterable[float], **kwargs) -> DataStream:
+    def filter(
+        self, filt_type: str, freq: float | Iterable[float], **kwargs
+    ) -> DataStream:
         """Filters data.
 
         Args:
@@ -324,6 +267,19 @@ class DataStream:
         self.data = pulse_compression(transmitted_signal, self.data, mode=mode)
         return self
 
+    def slice(
+        self,
+        starttime: int | float | np.datetime64 | None = None,
+        endtime: int | float | np.datetime64 | None = None,
+        nearest_sample: bool = True,
+    ) -> DataStream:
+        """Slices data by time."""
+        ds = copy(self)
+        ds.stats = deepcopy(self.stats)
+        return ds.trim(
+            starttime=starttime, endtime=endtime, nearest_sample=nearest_sample
+        )
+
     def trim(
         self,
         starttime: int | float | np.datetime64 | None = None,
@@ -359,6 +315,30 @@ class DataStream:
         if endtime:
             self._rtrim(endtime, pad, nearest_sample, fill_value)
         return self
+
+    def write(self, path: Path) -> None:
+        """Writes data to file."""
+        np.savez(path, stats=self.stats, data=self.data)
+
+    def write_hdf5(self, path: Path) -> None:
+        """Writes data to HDF5 file."""
+        with h5py.File(path, "w") as f:
+            f.create_dataset("data", data=self.data)
+            f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
+            for key, value in asdict(self.stats).items():
+                match value:
+                    case np.datetime64():
+                        f.attrs[key] = convert_datetime64_to_iso(value)
+                    case int() | float() | str() | bool():
+                        f.attrs[key] = value
+                    case _:
+                        f.attrs[key] = json.dumps(value)
+
+    def write_wav(self, path: Path) -> None:
+        """Writes data to WAV file."""
+        scipy.io.wavfile.write(
+            path, int(self.stats.sampling_rate), self.data.astype(np.int32)
+        )
 
     def _ltrim(
         self,
@@ -454,6 +434,28 @@ class DataStream:
             except IndexError:
                 self.data = np.empty(0, dtype=dtype)
         return self
+
+    def _post_init(self):
+        """Initializes data and time vector."""
+        # TODO: Need to improve this - does not handle edge cases properly.
+        # Set time_init to 0 if not provided
+        if self.stats.time_init is None:
+            self.stats.time_init = np.timedelta64(0, "us")
+
+        # Compute sampling rate if time_init and time_end are provided
+        if self.stats.time_end is not None and self.stats.sampling_rate is None:
+            self.stats.sampling_rate = (
+                self.stats.time_end - self.stats.time_init
+            ) / self.num_samples
+
+        # Set time_end if time_init and sampling rate are provided
+        if self.stats.time_end is None and self.stats.sampling_rate is not None:
+            self.stats.time_end = self.stats.time_init + np.timedelta64(
+                int(
+                    TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate
+                ),
+                TIME_PRECISION,
+            )
 
     def _rtrim(
         self,
