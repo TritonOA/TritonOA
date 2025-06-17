@@ -84,7 +84,7 @@ def get_filter(filt_type: str) -> Callable:
 
 def bandpass(
     data: np.ndarray,
-    freq: Iterable[float, float],
+    freq: Iterable[float],
     fs: float,
     corners: int = 4,
     zerophase: bool = False,
@@ -118,7 +118,7 @@ def bandpass(
 
 def bandstop(
     data: np.ndarray,
-    freq: Iterable[float, float],
+    freq: Iterable[float],
     fs: float,
     corners: int = 4,
     zerophase: bool = False,
