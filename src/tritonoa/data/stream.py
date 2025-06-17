@@ -246,6 +246,15 @@ class DataStream:
         self.data = func(self.data, freq, self.stats.sampling_rate, **kwargs)
         return self
 
+    def hilbert(self) -> DataStream:
+        """Applies Hilbert transform to data.
+
+        Returns:
+            DataStream: Data stream with Hilbert transform applied.
+        """
+        self.data = sp.hilbert(self.data)
+        return self
+
     def max(self) -> np.ndarray:
         """Returns maximum value of data.
 
