@@ -1,3 +1,4 @@
+from fractions import Fraction
 from typing import Sequence
 
 import numpy as np
@@ -161,3 +162,21 @@ def normalize_pressure(p: float | np.ndarray, log: bool = False) -> np.ndarray:
     if log:
         pn = 10 * np.log10(pn)
     return pn
+
+
+def resample_ratio(original_fs: float, target_fs: float) -> tuple[int, int]:
+    """Get the up and down factors for resampling from original_fs to target_fs.
+
+    Parameters
+    ----------
+    original_fs : float
+        Original sampling frequency.
+    target_fs : float
+        Target sampling frequency.
+    Returns
+    -------
+    tuple[int, int]
+        Up and down factors for resampling.
+    """
+    ratio = Fraction(target_fs / original_fs).limit_denominator(1000)
+    return ratio.numerator, ratio.denominator

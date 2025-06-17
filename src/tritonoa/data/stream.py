@@ -288,6 +288,30 @@ class DataStream:
         self.data = pulse_compression(transmitted_signal, self.data, mode=mode)
         return self
 
+    def resample(self, num: int, **kwargs) -> DataStream:
+        """Resamples data to a new number of samples.
+
+        Returns:
+            DataStream: Resampled data stream.
+        """
+        self.data = sp.resample(self.data, num, axis=1, **kwargs)
+        self.stats.sampling_rate = (
+            self.stats.sampling_rate * num / self.num_samples
+            if self.num_samples > 0
+            else None
+        )
+        return self
+
+    def resample_poly(self, up: int, down: int, **kwargs) -> DataStream:
+        """Resamples data using polyphase filtering.
+
+        Returns:
+            DataStream: Resampled data stream.
+        """
+        self.data = sp.resample_poly(self.data, up, down, axis=1, **kwargs)
+        self.stats.sampling_rate = self.stats.sampling_rate * up / down
+        return self
+
     def slice(
         self,
         starttime: int | float | np.datetime64 | None = None,
