@@ -31,6 +31,10 @@ class NoDataWarning(Warning):
     pass
 
 
+class TaperLengthWarning(Warning):
+    pass
+
+
 class DataFormat(Enum):
     """Data format."""
 
@@ -324,6 +328,62 @@ class DataStream:
         return ds.trim(
             starttime=starttime, endtime=endtime, nearest_sample=nearest_sample
         )
+
+    def taper(
+        self,
+        max_percentage: float = 0.05,
+        max_length: float | None = None,
+        window_type: str = "hann",
+        side: str = "both",
+        **kwargs,
+    ) -> DataStream:
+        if side not in ["left", "right", "both"]:
+            raise ValueError("side must be 'left', 'right', or 'both'.")
+        npts = self.num_samples
+        max_half_lengths = []
+        if max_percentage is not None:
+            max_half_lengths.append(int(max_percentage * npts))
+        if max_length is not None:
+            max_half_lengths.append(int(max_length * self.stats.sampling_rate))
+        if np.all([2 * mhl > npts for mhl in max_half_lengths]):
+            warnings.warn(
+                (
+                    "The requested taper is longer than the trace. "
+                    "The taper will be shortened to trace length."
+                ),
+                TaperLengthWarning,
+            )
+        max_half_lengths.append(int(npts / 2))
+        window_length = min(max_half_lengths)
+
+        if window_type == "cosine":
+            kwargs["p"] = 1.0
+        if 2 * window_length == npts:
+            taper_sides = sp.get_window((window_type, *kwargs), 2 * window_length)
+        else:
+            taper_sides = sp.get_window((window_type, *kwargs), 2 * window_length + 1)
+
+        if side == "left":
+            taper = np.hstack(
+                (taper_sides[:window_length], np.ones(npts - window_length))
+            )
+        elif side == "right":
+            taper = np.hstack(
+                (
+                    np.ones(npts - window_length),
+                    taper_sides[len(taper_sides) - window_length :],
+                )
+            )
+        else:
+            taper = np.hstack(
+                (
+                    taper_sides[:window_length],
+                    np.ones(npts - 2 * window_length),
+                    taper_sides[len(taper_sides) - window_length :],
+                )
+            )
+        self.data = self.data * taper
+        return self
 
     def trim(
         self,
