@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable
 import warnings
 
-import h5py
+from h5py import File, Group
 import numpy as np
 import scipy
 import scipy.signal as sp
@@ -322,23 +322,36 @@ class DataStream:
 
     def write_hdf5(self, path: Path) -> None:
         """Writes data to HDF5 file."""
-        with h5py.File(path, "w") as f:
-            f.create_dataset("data", data=self.data)
-            f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
-            for key, value in asdict(self.stats).items():
-                match value:
-                    case np.datetime64():
-                        f.attrs[key] = convert_datetime64_to_iso(value)
-                    case int() | float() | str() | bool():
-                        f.attrs[key] = value
-                    case _:
-                        f.attrs[key] = json.dumps(value)
+        with File(path, "w") as f:
+            self.create_hdf5_dataset(f)
+            # f.create_dataset("data", data=self.data)
+            # f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
+            # for key, value in asdict(self.stats).items():
+            #     match value:
+            #         case np.datetime64():
+            #             f.attrs[key] = convert_datetime64_to_iso(value)
+            #         case int() | float() | str() | bool():
+            #             f.attrs[key] = value
+            #         case _:
+            #             f.attrs[key] = json.dumps(value)
 
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""
         scipy.io.wavfile.write(
             path, int(self.stats.sampling_rate), self.data.astype(np.int32)
         )
+
+    def create_hdf5_dataset(self, f: File | Group) -> None:
+        f.create_dataset("data", data=self.data)
+        f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
+        for key, value in asdict(self.stats).items():
+            match value:
+                case np.datetime64():
+                    f.attrs[key] = convert_datetime64_to_iso(value)
+                case int() | float() | str() | bool():
+                    f.attrs[key] = value
+                case _:
+                    f.attrs[key] = json.dumps(value)
 
     def _ltrim(
         self,
