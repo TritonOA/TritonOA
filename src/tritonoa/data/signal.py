@@ -9,7 +9,12 @@ from typing import Callable, Iterable
 import warnings
 
 import numpy as np
+import numpy.typing as npt
 import scipy.signal as sp
+
+
+class TaperLengthWarning(Warning):
+    pass
 
 
 @dataclass
@@ -161,9 +166,7 @@ def highpass(
     if f > 1:
         raise ValueError(f"Selected corner frequency ({freq}) is above Nyquist ({fe}).")
 
-    z, p, k = sp.iirfilter(
-        corners, f, btype="highpass", ftype="butter", output="zpk"
-    )
+    z, p, k = sp.iirfilter(corners, f, btype="highpass", ftype="butter", output="zpk")
     sos = sp.zpk2sos(z, p, k)
     if zerophase:
         firstpass = sp.sosfilt(sos, data, axis=1)
@@ -189,9 +192,7 @@ def lowpass(
             )
         )
 
-    z, p, k = sp.iirfilter(
-        corners, f, btype="lowpass", ftype="butter", output="zpk"
-    )
+    z, p, k = sp.iirfilter(corners, f, btype="lowpass", ftype="butter", output="zpk")
     sos = sp.zpk2sos(z, p, k)
     if zerophase:
         firstpass = sp.sosfilt(sos, data, axis=1)
@@ -217,3 +218,57 @@ def pulse_compression(
     M, _ = received_signal.shape
     matched_filter = np.tile(np.conj(transmitted_signal[::-1]), (M, 1))
     return sp.fftconvolve(received_signal, matched_filter, mode=mode, axes=1)
+
+
+def taper(
+    npts: int,
+    max_percentage: float = 0.05,
+    max_length: float | None = None,
+    window_type: str = "hann",
+    side: str = "both",
+    sampling_rate: float = 1.0,
+    **kwargs,
+) -> npt.NDArray[np.float64]:
+    if side not in ["left", "right", "both"]:
+        raise ValueError("side must be 'left', 'right', or 'both'.")
+    max_half_lengths = []
+    if max_percentage is not None:
+        max_half_lengths.append(int(max_percentage * npts))
+    if max_length is not None:
+        max_half_lengths.append(int(max_length * sampling_rate))
+    if np.all([2 * mhl > npts for mhl in max_half_lengths]):
+        warnings.warn(
+            (
+                "The requested taper is longer than the trace. "
+                "The taper will be shortened to trace length."
+            ),
+            TaperLengthWarning,
+        )
+    max_half_lengths.append(int(npts / 2))
+    window_length = min(max_half_lengths)
+
+    if window_type == "cosine":
+        kwargs["p"] = 1.0
+    if 2 * window_length == npts:
+        taper_sides = sp.get_window((window_type, *kwargs), 2 * window_length)
+    else:
+        taper_sides = sp.get_window((window_type, *kwargs), 2 * window_length + 1)
+
+    if side == "left":
+        taper = np.hstack((taper_sides[:window_length], np.ones(npts - window_length)))
+    elif side == "right":
+        taper = np.hstack(
+            (
+                np.ones(npts - window_length),
+                taper_sides[len(taper_sides) - window_length :],
+            )
+        )
+    else:
+        taper = np.hstack(
+            (
+                taper_sides[:window_length],
+                np.ones(npts - 2 * window_length),
+                taper_sides[len(taper_sides) - window_length :],
+            )
+        )
+    return taper
