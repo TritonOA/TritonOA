@@ -337,6 +337,7 @@ class DataStream:
         side: str = "both",
         **kwargs,
     ) -> DataStream:
+        # TODO: Refactor into `signal.util` module.
         if side not in ["left", "right", "both"]:
             raise ValueError("side must be 'left', 'right', or 'both'.")
         npts = self.num_samples
