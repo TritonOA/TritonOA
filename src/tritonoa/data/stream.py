@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import copy, deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -7,7 +8,6 @@ import json
 import locale
 import math
 from pathlib import Path
-from typing import Iterable
 import warnings
 
 from h5py import File, Group
@@ -233,8 +233,24 @@ class DataStream:
         self.stats.sampling_rate = self.stats.sampling_rate / float(factor)
         return self
 
+    def detrend(
+        self, axis: int = -1, type: str = "linear", bp: int | Sequence[int] = 0
+    ) -> DataStream:
+        """Detrend data.
+
+        Args:
+            axis (int, optional): Axis along which to detrend. Defaults to -1.
+            type (str, optional): Type of detrending. Defaults to 'linear'.
+            bp (int | Sequence[int], optional): Breakpoints for detrending. Defaults to 0.
+
+        Returns:
+            DataStream: Detrended data stream.
+        """
+        sp.detrend(self.data, axis=axis, type=type, bp=bp, overwrite_data=True)
+        return self
+
     def filter(
-        self, filt_type: str, freq: float | Iterable[float], **kwargs
+        self, filt_type: str, freq: float | Sequence[float], **kwargs
     ) -> DataStream:
         """Filters data.
 
