@@ -178,36 +178,51 @@ def read_hdf5(path: Path) -> DataStream:
         DataStream: Data stream object with loaded data and statistics.
     """
     with h5py.File(path, "r") as f:
-        data = f["data"][:]
+        return read_hdf5_group(f)
 
-        stats_dict = {}
-        for key in [
-            "channels",
-            "time_init",
-            "time_end",
-            "sampling_rate",
-            "units",
-            "metadata",
-        ]:
-            if key in f.attrs:
-                value = f.attrs[key]
-                # Handle possible JSON serialized values
-                if isinstance(value, str) and (
-                    value.startswith("{") or value.startswith("[") or value == "null"
-                ):
-                    try:
-                        stats_dict[key] = json.loads(value)
-                    except json.JSONDecodeError:
-                        stats_dict[key] = value
-                else:
+
+def read_hdf5_group(
+    group: h5py.Group,
+) -> DataStream:
+    """
+    Reads data from an HDF5 group and returns a DataStream object.
+
+    Args:
+        group (h5py.Group): HDF5 group containing the data.
+
+    Returns:
+        DataStream: Data stream object with loaded data and statistics.
+    """
+    data = group["data"][:]
+
+    stats_dict = {}
+    for key in [
+        "channels",
+        "time_init",
+        "time_end",
+        "sampling_rate",
+        "units",
+        "metadata",
+    ]:
+        if key in group.attrs:
+            value = group.attrs[key]
+            # Handle possible JSON serialized values
+            if isinstance(value, str) and (
+                value.startswith("{") or value.startswith("[") or value == "null"
+            ):
+                try:
+                    stats_dict[key] = json.loads(value)
+                except json.JSONDecodeError:
                     stats_dict[key] = value
+            else:
+                stats_dict[key] = value
 
-        # Convert ISO datetime strings back to np.datetime64
-        for dt_key in ["time_init", "time_end"]:
-            if dt_key in stats_dict:
-                stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
+    # Convert ISO datetime strings back to np.datetime64
+    for dt_key in ["time_init", "time_end"]:
+        if dt_key in stats_dict:
+            stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
 
-        return DataStream(stats=DataStreamStats(**stats_dict), data=data)
+    return DataStream(stats=DataStreamStats(**stats_dict), data=data)
 
 
 def read_numpy(file_path: Path) -> DataStream:
