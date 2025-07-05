@@ -563,6 +563,10 @@ class DataStream:
 
         # Set time_end if time_init and sampling rate are provided
         if self.stats.time_end is None and self.stats.sampling_rate is not None:
+            if isinstance(self.stats.time_init, float):
+                self.stats.time_init = np.timedelta64(
+                    int(self.stats.time_init * TIME_CONVERSION_FACTOR), TIME_PRECISION
+                )
             self.stats.time_end = self.stats.time_init + np.timedelta64(
                 int(
                     TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate
