@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Protocol
 
 import numpy as np
 import polars as pl
@@ -31,12 +31,12 @@ class DataRecord:
     filename: Path
     record_number: int
     file_format: str
-    timestamp_orig: np.datetime64 | pl.Datetime
-    timestamp: np.datetime64 | pl.Datetime
-    sampling_rate_orig: float
-    sampling_rate: float
-    npts: Optional[int] = None
-    nch: Optional[int] = None
+    timestamp_orig: np.datetime64 | pl.Datetime | None = None
+    timestamp: np.datetime64 | pl.Datetime | None = None
+    sampling_rate_orig: float = 1.0
+    sampling_rate: float = 1.0
+    npts: int | None = None
+    nch: int | None = None
     gain: float = 0.0
     sensitivity: float = 0.0
 
@@ -75,7 +75,7 @@ class BaseRecordFormatter(ABC):
 
 
 def validate_channels(
-    nch: int, channels: Optional[int | list[int]] = None
+    nch: int, channels: int | list[int] | None = None
 ) -> list[int]:
     if channels is None:
         return list(range(nch))
