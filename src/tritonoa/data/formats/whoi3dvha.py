@@ -207,12 +207,6 @@ class WHOI3DVHARecordFormatter(BaseRecordFormatter):
     def callback(records: list[DataRecord]) -> list[DataRecord]:
         """Format SHRU records.
 
-        The time stamp of the first record in the 4-channel SHRU files seem
-        to be rounded to seconds. This function corrects the time stamp of
-        the first record by calculating the time offset between the first
-        and second records using the number of points in the record and
-        the sampling rate.
-
         Args:
             records (list[Record]): List of records.
 
