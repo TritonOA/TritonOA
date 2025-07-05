@@ -79,6 +79,64 @@ def convert_dtarray_to_ydarray(
     return arr
 
 
+def convert_filename_to_datetime64(
+    filename: str,
+    doy_indices: tuple[int, int],
+    hour_indices: tuple[int, int],
+    minute_indices: tuple[int, int],
+    year_indices: tuple[int, int] | None = None,
+    year: int | None = None,
+    seconds_indices: tuple[int, int] | None = None,
+):
+    """Convert a filename with flexible format to np.datetime64 with microsecond
+    precision.
+
+    Args:
+        filename: The filename containing date/time components.
+        doy_indices: (start_index, length) for day-of-year.
+        hour_indices: (start_index, length) for hours.
+        minute_indices: (start_index, length) for minutes.
+        year_indices: (start_index, length) for year.
+        year: Direct year specification if not in filename.
+        seconds_indices: (start_index, length) for seconds.
+
+    Returns:
+        Datetime with microsecond precision.
+    """
+    # Extract components
+    doy = int(filename[doy_indices[0] : doy_indices[0] + doy_indices[1]])
+    hour = int(filename[hour_indices[0] : hour_indices[0] + hour_indices[1]])
+    minute = int(filename[minute_indices[0] : minute_indices[0] + minute_indices[1]])
+
+    # Handle seconds if provided
+    second = 0
+    if seconds_indices:
+        second = int(
+            filename[seconds_indices[0] : seconds_indices[0] + seconds_indices[1]]
+        )
+
+    # Handle year
+    if year_indices:
+        # Extract year from filename
+        year_str = filename[year_indices[0] : year_indices[0] + year_indices[1]]
+
+        # Handle YY format
+        if len(year_str) == 2:
+            # Assume 20XX for years less than 50, 19XX otherwise
+            prefix = "20" if int(year_str) < 50 else "19"
+            year_str = prefix + year_str
+
+        year = int(year_str)
+    elif year is None:
+        # Default to current year if not specified
+        year = datetime.now().year
+
+    date = datetime.strptime(f"{year}-{doy}", "%Y-%j").replace(
+        hour=hour, minute=minute, second=second
+    )
+    return np.datetime64(date, TIME_PRECISION)
+
+
 def convert_ints_to_datetime(
     year: int, yd: int, minute: int, millisec: int, microsec: int
 ) -> np.datetime64:
@@ -138,7 +196,7 @@ def convert_yydfrac_to_timestamp(year: int, yd: float) -> np.datetime64:
     day = int(yd)
     fraction = yd - day
     rmndr = int(fraction * 24 * 60 * 60 * TIME_CONVERSION_FACTOR)
-    return base_date + np.timedelta64(day, "D") + np.timedelta64(rmndr, "us")
+    return base_date + np.timedelta64(day, "D") + np.timedelta64(rmndr, TIME_PRECISION)
 
 
 def correct_sampling_rate(fs: float, drift_rate: float) -> float:
