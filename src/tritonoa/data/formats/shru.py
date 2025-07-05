@@ -162,6 +162,7 @@ class SHRUReader(base.BaseReader):
         channels: int | list[int] | None = None,
         clock: ClockParameters = ClockParameters(),
         conditioner: SignalParams = SignalParams(),
+        metadata: dict | None = None,
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
 
@@ -192,6 +193,7 @@ class SHRUReader(base.BaseReader):
                 time_init=ts,
                 sampling_rate=fs,
                 units=units,
+                metadata=metadata,
             ),
             data=data,
         )

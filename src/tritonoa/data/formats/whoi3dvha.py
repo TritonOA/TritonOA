@@ -85,14 +85,20 @@ class WHOI3DVHAHeader:
 
 
 class WHOI3DVHAReader(BaseReader):
-    def read(self, file_path: Path, channels: list[int] | None = None) -> DataStream:
+    def read(
+        self,
+        file_path: Path,
+        channels: int | list[int] | None = None,
+        metadata: dict | None = None,
+    ) -> DataStream:
+        channels = [channels] if isinstance(channels, int) else channels
         raw_data, header = self.read_raw_data(file_path, channels=channels)
-
         return DataStream(
             stats=DataStreamStats(
                 channels=[i for i in range(header.channels)],
                 sampling_rate=header.sampling_rate,
                 time_init=header.datetime(),
+                metadata=metadata,
             ),
             data=raw_data,
         )
