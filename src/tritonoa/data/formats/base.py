@@ -65,6 +65,9 @@ class BaseReader(ABC):
     @abstractmethod
     def read_raw_data() -> None: ...
 
+    @abstractmethod
+    def condition_data(self, raw_data: np.ndarray, *args, **kwargs) -> None: ...
+
 
 class BaseRecordFormatter(ABC):
     @abstractmethod
@@ -74,9 +77,7 @@ class BaseRecordFormatter(ABC):
     def format_record(self, **kwargs) -> None: ...
 
 
-def validate_channels(
-    nch: int, channels: int | list[int] | None = None
-) -> list[int]:
+def validate_channels(nch: int, channels: int | list[int] | None = None) -> list[int]:
     if channels is None:
         return list(range(nch))
 
