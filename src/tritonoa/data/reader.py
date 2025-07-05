@@ -35,6 +35,7 @@ def read_inventory(
     channels: int | list[int] = None,
     metadata: dict | None = None,
     max_buffer: int = MAX_BUFFER,
+    file_format: str | None = None,
 ) -> DataStream:
     """Reads data from inventory using the query parameters.
 
@@ -135,7 +136,10 @@ def read_inventory(
 
         # Read data from file; header is not used here:
         logging.debug("Reading raw data.")
-        reader = factory.get_reader(filename.suffix)
+        if file_format is None:
+            reader = factory.get_reader(filename.suffix)
+        else:
+            reader = factory.get_reader(file_format)
         raw_data, _ = reader.read_raw_data(filename, records=rec_ind, channels=channels)
         logging.debug(f"Raw data shape: {raw_data.shape}.")
         # Condition data and get units:
