@@ -158,12 +158,11 @@ class SHRUReader(base.BaseReader):
     def read(
         self,
         file_path: Path,
-        records: int | list[int] = None,
-        channels: int | list[int] = None,
+        records: int | list[int] | None = None,
+        channels: int | list[int] | None = None,
         clock: ClockParameters = ClockParameters(),
         conditioner: SignalParams = SignalParams(),
     ) -> DataStream:
-
         channels = [channels] if isinstance(channels, int) else channels
 
         # Read data and headers
