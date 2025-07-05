@@ -8,6 +8,7 @@ import struct
 from typing import BinaryIO
 
 import numpy as np
+from numpy.typing import NDArray
 
 from tritonoa.data.formats.base import (
     BaseReader,
@@ -175,9 +176,7 @@ class SIOReader(BaseReader):
         self,
         filename: Path,
         records: int = 1,
-        # s_start: int = 0,
         channels: int | list[int] | None = None,
-        # Ns: int = -1,
     ) -> tuple[np.ndarray, SIOHeader]:
         """Translation of Jit Sarkar's sioread.m to Python (which was a
         modification of Aaron Thode's with contributions from Geoff Edelman,
@@ -208,8 +207,7 @@ class SIOReader(BaseReader):
             Descriptors found in file header.
         """
         Ns = -1
-        s_start = 0 if records == 1 else (records - 1) * Ns
-        print(channels)
+        s_start = 1
         with open(filename, "rb") as fid:
             header, endian = self._read_header(fid)
 
@@ -261,31 +259,32 @@ class SIOReader(BaseReader):
                 raise SIOReadError("Not enough samples read from file")
 
             # Reshape data into a matrix of records
-            raw_data = np.reshape(raw_data, (r_total, samples_per_record))
-
+            raw_data = np.reshape(raw_data, (r_total, samples_per_record)).T
             # 	Select each requested channel and stack associated records
-            m = len(channels)
-            n = int(r_total / num_channels * samples_per_record)
+            n = len(channels)
+            m = int(r_total / num_channels * samples_per_record)
             data = np.zeros((m, n))
-            # return
-            for i in range(len(channels)):
-                chan = channels[i]
+            for i, chan in enumerate(channels):
                 blocks = np.arange(chan, r_total, num_channels, dtype="int")
-                data[i] = raw_data[blocks].T.reshape(
-                    n,
-                )
+                data[:, i] = raw_data[:, blocks].T.reshape(m, 1)[:, 0]
 
             # Trim unneeded samples from start and end of matrix
-            trim_start = int(s_start % samples_per_record)
+            trim_start = int((s_start - 1) % samples_per_record)
             if trim_start != 0:
                 data = data[trim_start:, :]
-            if n > Ns:
+            if m > Ns:
                 data = data[: int(Ns), :]
-            if n < Ns:
+            if m < Ns:
                 raise SIOReadError(
-                    f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
+                    f"Requested # of samples not returned. Check that s_start"
+                    f"({s_start}) is multiple of rec_num: {samples_per_record}"
                 )
-            return data, header
+            return data.T, header
+
+    def condition_data(
+        self, raw_data: NDArray, *args, **kwargs
+    ) -> tuple[NDArray[np.float64], None]:
+        return raw_data, None
 
 
 class SIORecordFormatter(BaseRecordFormatter):
