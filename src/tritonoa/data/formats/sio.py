@@ -89,26 +89,27 @@ class SIOReader(BaseReader):
     def read(
         self,
         file_path: Path,
-        records: int | list[int] | None = None,
         channels: int | list[int] | None = None,
-        clock: ClockParameters = ClockParameters(),
-        conditioner: SignalParams = SignalParams(),
-        # sampling_rate: Optional[float] = 1.0,
-        # units: Optional[str] = "normalized",
+        time_init: float | np.datetime64 = 0.0,
+        time_end: float | np.datetime64 | None = None,
+        sampling_rate: float | None = None,
+        units: str | None = None,
+        metadata: dict | None = None,
+        # clock: ClockParameters = ClockParameters(),
+        # conditioner: SignalParams = SignalParams(),
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
-
-        raw_data, header = self.read_raw_data(
-            file_path, records=records, channels=channels
-        )
-        return
+        raw_data, header = self.read_raw_data(file_path, channels=channels)
         return DataStream(
             stats=DataStreamStats(
-                channels=channels,
+                channels=[i for i in range(header.num_channels)],
+                time_init=time_init,
+                time_end=time_end,
                 sampling_rate=sampling_rate,
                 units=units,
+                metadata=metadata,
             ),
-            data=data,
+            data=raw_data,
         )
 
     @staticmethod
@@ -172,11 +173,12 @@ class SIOReader(BaseReader):
 
     def read_raw_data(
         self,
-        file_path: Path,
-        s_start: int = 0,
+        filename: Path,
+        records: int = 1,
+        # s_start: int = 0,
         channels: int | list[int] | None = None,
-        Ns: int = -1,
-    ) -> tuple[np.ndarray, dict]:
+        # Ns: int = -1,
+    ) -> tuple[np.ndarray, SIOHeader]:
         """Translation of Jit Sarkar's sioread.m to Python (which was a
         modification of Aaron Thode's with contributions from Geoff Edelman,
         James Murray, and Dave Ensberg).
@@ -205,8 +207,10 @@ class SIOReader(BaseReader):
         header : dict
             Descriptors found in file header.
         """
-
-        with open(file_path, "rb") as fid:
+        Ns = -1
+        s_start = 0 if records == 1 else (records - 1) * Ns
+        print(channels)
+        with open(filename, "rb") as fid:
             header, endian = self._read_header(fid)
 
             samples_per_record = header.samples_per_record
@@ -281,7 +285,6 @@ class SIOReader(BaseReader):
                 raise SIOReadError(
                     f"Requested # of samples not returned. Check that s_start ({s_start}) is multiple of rec_num: {samples_per_record}"
                 )
-
             return data, header
 
 
