@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 from typing import Optional
 
 import numpy as np
@@ -107,13 +108,21 @@ def convert_filename_to_datetime64(
     doy = int(filename[doy_indices[0] : doy_indices[0] + doy_indices[1]])
     hour = int(filename[hour_indices[0] : hour_indices[0] + hour_indices[1]])
     minute = int(filename[minute_indices[0] : minute_indices[0] + minute_indices[1]])
-
     # Handle seconds if provided
     second = 0
+    logging.debug(
+        f"Extracted components from filename '{filename}': "
+        f"doy={doy}, hour={hour}, minute={minute}"
+    )
     if seconds_indices:
+        # print(seconds_indices[0], seconds_indices[1])
         second = int(
             filename[seconds_indices[0] : seconds_indices[0] + seconds_indices[1]]
         )
+
+    logging.debug(
+        f"Extracted seconds from filename '{filename}': second={second if second else 'N/A'}"
+    )
 
     # Handle year
     if year_indices:
@@ -131,9 +140,12 @@ def convert_filename_to_datetime64(
         # Default to current year if not specified
         year = datetime.now().year
 
+    logging.debug(f"Final year extracted: {year}")
+
     date = datetime.strptime(f"{year}-{doy}", "%Y-%j").replace(
         hour=hour, minute=minute, second=second
     )
+    logging.debug(f"Constructed datetime: {date}")
     return np.datetime64(date, TIME_PRECISION)
 
 
