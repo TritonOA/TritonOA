@@ -380,15 +380,16 @@ def _select_records_by_time(
         return df.filter(mask)
     if time_start is None and time_end is not None:
         logging.debug("Only end time provided; returning all rows before.")
-        return df.filter(pl.col("timestamp") <= time_end)
+        return df.filter(pl.col("timestamp") < time_end)
     if time_start > time_end:
         raise ValueError("time_start must be less than time_end.")
 
     logging.debug("Start and end times provided; returning rows between.")
-    last_row_before_start = df.filter(pl.col("timestamp") < time_start)["row_nr"].max()
+    last_row_before_start = df.filter(pl.col("timestamp") <= time_start)["row_nr"].max()
     row_numbers = df.filter(
-        (pl.col("timestamp") >= time_start) & (pl.col("timestamp") <= time_end)
+        (pl.col("timestamp") >= time_start) & (pl.col("timestamp") < time_end)
     )["row_nr"].to_list()
-    row_numbers.insert(0, last_row_before_start)
+    if last_row_before_start not in row_numbers:
+        row_numbers.insert(0, last_row_before_start)
     mask = pl.col("row_nr").is_in(row_numbers)
     return df.filter(mask)
