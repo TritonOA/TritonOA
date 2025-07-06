@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+from datetime import datetime
 import json
 import logging
 from pathlib import Path
@@ -10,7 +12,7 @@ import polars as pl
 from tritonoa.data.inventory import Inventory
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.signal import SignalParams
-from tritonoa.data.stream import DataStream, DataStreamStats
+from tritonoa.data.stream import DataStream, DataStreamStats, pipeline
 from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION
 
 MAX_BUFFER = int(2e9)
@@ -28,6 +30,116 @@ class NoDataError(Exception):
     pass
 
 
+def read_and_process(
+    inventory: Path,
+    start: str | np.datetime64,
+    end: str | np.datetime64,
+    channels: int | Sequence[int] | None = None,
+    detrend: bool = True,
+    taper_pc: float | None = None,
+    dec_factor: int | None = None,
+    filt_type: str | None = None,
+    filt_freq: float | Sequence[float] | None = None,
+    metadata: dict | None = None,
+    detrend_kwargs: dict = {},
+) -> DataStream:
+    """Read and process data from an inventory file.
+
+    Args:
+        inventory (Path): Path to the inventory file.
+        start (str | np.datetime64): Start time for data selection.
+        end (str | np.datetime64): End time for data selection.
+        channels (int | Sequence[int] | None): Channel indices to read.
+        detrend (bool): Whether to detrend the data.
+        taper_pc (float | None): Percentage of taper to apply.
+        dec_factor (int | None): Decimation factor for downsampling.
+        filt_type (str | None): Type of filter to apply (e.g., 'bandpass', 'lowpass').
+        filt_freq (float | Sequence[float] | None): Filter frequency or frequencies.
+        metadata (dict | None): Additional metadata to attach to the DataStream.
+        detrend_kwargs (dict): Additional keyword arguments for detrending.
+
+    Returns:
+        DataStream: Processed data stream object.
+    """
+    if isinstance(start, str) | isinstance(start, datetime):
+        start = np.datetime64(start, TIME_PRECISION)
+    if isinstance(end, str) | isinstance(end, datetime):
+        end = np.datetime64(end, TIME_PRECISION)
+
+    ds = read_inventory(
+        file_path=inventory,
+        time_start=start,
+        time_end=end,
+        channels=channels,
+        metadata=metadata,
+    )
+    return pipeline(
+        ds,
+        detrend=detrend,
+        taper_pc=taper_pc,
+        dec_factor=dec_factor,
+        filt_type=filt_type,
+        filt_freq=filt_freq,
+        detrend_kwargs=detrend_kwargs,
+    )
+
+
+def read_hdf5(path: Path) -> DataStream:
+    """Read data from an HDF5 file and returns a DataStream object.
+
+    Args:
+        path (Path): Path to the HDF5 file.
+
+    Returns:
+        DataStream: Data stream object with loaded data and statistics.
+    """
+    with h5py.File(path, "r") as f:
+        return read_hdf5_group(f)
+
+
+def read_hdf5_group(
+    group: h5py.Group,
+) -> DataStream:
+    """Read data from an HDF5 group and returns a DataStream object.
+
+    Args:
+        group (h5py.Group): HDF5 group containing the data.
+
+    Returns:
+        DataStream: Data stream object with loaded data and statistics.
+    """
+    data = group["data"][:]
+
+    stats_dict = {}
+    for key in [
+        "channels",
+        "time_init",
+        "time_end",
+        "sampling_rate",
+        "units",
+        "metadata",
+    ]:
+        if key in group.attrs:
+            value = group.attrs[key]
+            # Handle possible JSON serialized values
+            if isinstance(value, str) and (
+                value.startswith("{") or value.startswith("[") or value == "null"
+            ):
+                try:
+                    stats_dict[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    stats_dict[key] = value
+            else:
+                stats_dict[key] = value
+
+    # Convert ISO datetime strings back to np.datetime64
+    for dt_key in ["time_init", "time_end"]:
+        if dt_key in stats_dict:
+            stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
+
+    return DataStream(stats=DataStreamStats(**stats_dict), data=data)
+
+
 def read_inventory(
     file_path: Path,
     time_start: np.datetime64 | None = None,
@@ -37,7 +149,7 @@ def read_inventory(
     max_buffer: int = MAX_BUFFER,
     file_format: str | None = None,
 ) -> DataStream:
-    """Reads data from inventory using the query parameters.
+    """Read data from inventory using the query parameters.
 
     Args:
         query (InventoryQuery): Query parameters.
@@ -169,64 +281,6 @@ def read_inventory(
         ),
         data=waveform,
     ).trim(starttime=time_start, endtime=time_end)
-
-
-def read_hdf5(path: Path) -> DataStream:
-    """
-    Reads data from an HDF5 file and returns a DataStream object.
-
-    Args:
-        path (Path): Path to the HDF5 file.
-
-    Returns:
-        DataStream: Data stream object with loaded data and statistics.
-    """
-    with h5py.File(path, "r") as f:
-        return read_hdf5_group(f)
-
-
-def read_hdf5_group(
-    group: h5py.Group,
-) -> DataStream:
-    """
-    Reads data from an HDF5 group and returns a DataStream object.
-
-    Args:
-        group (h5py.Group): HDF5 group containing the data.
-
-    Returns:
-        DataStream: Data stream object with loaded data and statistics.
-    """
-    data = group["data"][:]
-
-    stats_dict = {}
-    for key in [
-        "channels",
-        "time_init",
-        "time_end",
-        "sampling_rate",
-        "units",
-        "metadata",
-    ]:
-        if key in group.attrs:
-            value = group.attrs[key]
-            # Handle possible JSON serialized values
-            if isinstance(value, str) and (
-                value.startswith("{") or value.startswith("[") or value == "null"
-            ):
-                try:
-                    stats_dict[key] = json.loads(value)
-                except json.JSONDecodeError:
-                    stats_dict[key] = value
-            else:
-                stats_dict[key] = value
-
-    # Convert ISO datetime strings back to np.datetime64
-    for dt_key in ["time_init", "time_end"]:
-        if dt_key in stats_dict:
-            stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
-
-    return DataStream(stats=DataStreamStats(**stats_dict), data=data)
 
 
 def read_numpy(file_path: Path) -> DataStream:

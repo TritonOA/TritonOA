@@ -661,3 +661,38 @@ class DataStream:
             TIME_PRECISION,
         )
         return self
+
+
+def pipeline(
+    ds: DataStream,
+    detrend: bool = True,
+    taper_pc: float | None = None,
+    dec_factor: int | None = None,
+    filt_type: str | None = None,
+    filt_freq: float | Sequence[float] | None = None,
+    detrend_kwargs: dict = {},
+) -> DataStream:
+    """Applies a signal processing pipeline to a DataStream object.
+
+    Args:
+        ds (DataStream): The DataStream object to process.
+        detrend (bool, optional): Whether to detrend the data. Defaults to True.
+        taper_pc (float | None, optional): Percentage of taper to apply. Defaults to None.
+        dec_factor (int | None, optional): Decimation factor. Defaults to None.
+        filt_type (str | None, optional): Type of filter to apply. Defaults to None.
+        filt_freq (float | Sequence[float] | None, optional): Frequency or frequencies
+            for filtering. Defaults to None.
+        detrend_kwargs (dict, optional): Additional keyword arguments for detrending.
+
+    Returns:
+        DataStream: The processed DataStream object.
+    """
+    if detrend:
+        ds.detrend(**detrend_kwargs)
+    if taper_pc is not None:
+        ds.taper(max_percentage=taper_pc)
+    if dec_factor is not None:
+        ds.decimate(dec_factor)
+    if filt_type is not None and filt_freq is not None:
+        ds.filter(filt_type, filt_freq)
+    return ds
