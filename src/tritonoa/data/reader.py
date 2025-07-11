@@ -195,15 +195,15 @@ def read_inventory(
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
+    if len(df) == 0:
+        raise NoDataError("No data found for the given query parameters.")
+    logging.debug(f"Reading {len(df)} records.")
+
     if channels is None:
         num_channels = _get_nchannels(df)
     else:
         channels = [channels] if isinstance(channels, int) else channels
         num_channels = len(channels)
-
-    if len(df) == 0:
-        raise NoDataError("No data found for the given query parameters.")
-    logging.debug(f"Reading {len(df)} records.")
 
     filenames = [
         Path(f) for f in sorted(df.unique(subset=["filename"])["filename"].to_list())
