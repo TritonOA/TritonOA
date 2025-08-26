@@ -2,11 +2,12 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import BinaryIO
+import warnings
 from wave import Wave_read
 
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike, NDArray
-from scipy.io.wavfile import read as wavread
+from scipy.io import wavfile
 
 from tritonoa.data.formats.base import (
     BaseReader,
@@ -22,6 +23,11 @@ from tritonoa.data.time import (
     convert_filename_to_datetime64,
     correct_clock_drift,
     correct_sampling_rate,
+)
+from tritonoa.data.signal import (
+    convert_counts_to_voltage,
+    convert_voltage_to_pressure,
+    db_to_linear,
 )
 
 
@@ -39,6 +45,10 @@ class WAVHeader:
     compression_type: str = "NONE"
     compression_name: str = "not compressed"
 
+    @property
+    def bit_depth(self) -> int:
+        return self.bytes_per_sample * 8
+
 
 class WAVReader(BaseReader):
 
@@ -55,6 +65,11 @@ class WAVReader(BaseReader):
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
         raw_data, header = self.read_raw_data(file_path, channels=channels)
+
+        data, units = self.condition_data(
+            raw_data, conditioner=conditioner, bit_depth=header.bit_depth
+        )
+
         return DataStream(
             stats=DataStreamStats(
                 channels=[i for i in range(header.num_channels)],
@@ -64,7 +79,7 @@ class WAVReader(BaseReader):
                 units=units,
                 metadata=metadata,
             ),
-            data=raw_data,
+            data=data,
         )
 
     def read_headers(self, filename: Path) -> list[WAVHeader]:
@@ -90,19 +105,41 @@ class WAVReader(BaseReader):
 
         channels = validate_channels(header.num_channels, channels)
 
-        _, data = wavread(filename)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", wavfile.WavFileWarning)
+            _, data = wavfile.read(filename)
         if data.ndim == 1:
             data = data[np.newaxis, :]
         if channels is not None:
             data = data[channels, :]
             header.num_channels = len(channels)
 
-        return convert_wav_int_to_float(data), header
+        return data, header
 
     def condition_data(
-        self, raw_data: ArrayLike, *args, **kwargs
+        self, raw_data: ArrayLike, conditioner: SignalParams, bit_depth: int
     ) -> tuple[NDArray[np.float64], None]:
-        return raw_data, None
+        # return raw_data, "counts"
+        try:
+            conditioner.check_dimensions(raw_data.shape[0])
+        except ValueError as e:
+            warnings.warn(
+                f"Incorrect number of gain or sensitivity values set: {e}"
+                f"len(gain)={len(conditioner.gain)}, "
+                f"len(sensitivity)={len(conditioner.sensitivity)}, "
+                f"len(channels)={raw_data.shape[0]}."
+                f"Returning the data unconditioned."
+            )
+            return raw_data, "counts"
+
+        linear_fixed_gain = db_to_linear(conditioner.gain)
+        linear_sensitivity = db_to_linear(conditioner.sensitivity)
+        ADC_max = 2 ** (bit_depth - 1) - 1
+
+        voltage, _ = convert_counts_to_voltage(
+            raw_data, linear_fixed_gain, conditioner.adc_vref, ADC_max
+        )
+        return convert_voltage_to_pressure(voltage, linear_sensitivity)
 
 
 class WAVRecordFormatter(BaseRecordFormatter):
@@ -122,25 +159,25 @@ class WAVRecordFormatter(BaseRecordFormatter):
 
     def format_record(
         self,
+        *,
         filename: Path,
         record_number: int,
         header: WAVHeader,
-        clock: ClockParameters,
         conditioner: SignalParams,
+        **kwargs,
     ) -> DataRecord:
         conditioner.fill_like_channels(header.num_channels)
-        ts = 0.0
-        fs = header.sample_rate
         return DataRecord(
             filename=filename,
             record_number=record_number,
             file_format=self.file_format,
-            timestamp_orig=ts,
-            timestamp=correct_clock_drift(ts, clock),
-            sampling_rate_orig=fs,
-            sampling_rate=correct_sampling_rate(fs, clock.drift_rate),
+            timestamp_orig=0.0,
+            timestamp=0.0,
+            sampling_rate_orig=header.sample_rate,
+            sampling_rate=header.sample_rate,
             npts=header.num_samples,
             nch=header.num_channels,
+            adc_vref=conditioner.adc_vref,
             gain=conditioner.gain,
             sensitivity=conditioner.sensitivity,
         )
@@ -156,6 +193,7 @@ def callback(
     year_indices: tuple[int, int] | None = None,
     year: int | None = None,
     seconds_indices: tuple[int, int] | None = None,
+    clock: ClockParameters = ClockParameters(),
 ) -> list[DataRecord]:
     """Format WAV records.
 
@@ -181,29 +219,9 @@ def callback(
             seconds_indices,
         )
         record.timestamp_orig = timestamp
-        record.timestamp = timestamp
+        record.timestamp = correct_clock_drift(timestamp, clock)
+        record.sampling_rate = correct_sampling_rate(
+            record.sampling_rate_orig, clock.drift_rate
+        )
 
     return records
-
-
-def convert_wav_int_to_float(data: NDArray) -> NDArray[np.float64]:
-    """Convert integer data to double precision data.
-
-    Args:
-        data: Raw audio data (from .wav)
-
-    Returns:
-        array of 32 bit float data
-    """
-    if data.dtype == "float32":
-        return data.astype(np.float64)
-    if data.dtype == "int32":
-        nbits = 32
-    if data.dtype == "int24":
-        nbits = 24
-    if data.dtype == "int16":
-        nbits = 16
-
-    max_nbits = float(2 ** (nbits - 1))
-
-    return (data / (max_nbits + 1)).astype(np.float64)
