@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from math import ceil
 from pathlib import Path
 from typing import BinaryIO
 from wave import Wave_read
@@ -19,11 +18,8 @@ from tritonoa.data.formats.base import (
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
-    TIME_CONVERSION_FACTOR,
-    TIME_PRECISION,
     ClockParameters,
     convert_filename_to_datetime64,
-    convert_ints_to_datetime,
     correct_clock_drift,
     correct_sampling_rate,
 )
@@ -103,7 +99,9 @@ class WAVReader(BaseReader):
 
         return convert_wav_int_to_float(data), header
 
-    def condition_data(self, raw_data: ArrayLike, *args, **kwargs) -> tuple[NDArray[np.float64], None]:
+    def condition_data(
+        self, raw_data: ArrayLike, *args, **kwargs
+    ) -> tuple[NDArray[np.float64], None]:
         return raw_data, None
 
 
@@ -121,7 +119,6 @@ class WAVRecordFormatter(BaseRecordFormatter):
             List of formatted DataRecord objects.
         """
         return records
-
 
     def format_record(
         self,
