@@ -37,7 +37,7 @@ class SIODataFormat(Enum):
 
 class SIOFileFormat(FileFormatCheckerMixin, Enum):
     FORMAT = "SIO"
-    D23 = ".SIO"
+    SIO = ".SIO"
 
 
 @dataclass
