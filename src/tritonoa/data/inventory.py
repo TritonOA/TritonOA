@@ -57,8 +57,8 @@ class Inventory:
         self,
         dataset_path: Path,
         glob_pattern: str = "*",
-        clock_params: ClockParameters | None = None,
-        conditioner: SignalParams | None = None,
+        clock_params: ClockParameters = ClockParameters(),
+        conditioner: SignalParams = SignalParams(),
         file_format: str | None = None,
         record_fmt_callback: Callable | None = None,
     ) -> DataFrame:
@@ -91,11 +91,6 @@ class Inventory:
             logging.debug(f"{len(corrected_records)} records processed from {file}.")
             return corrected_records
 
-        if clock_params is None:
-            clock_params = ClockParameters()
-        if conditioner is None:
-            conditioner = SignalParams()
-
         files = self._get_files(dataset_path, glob_pattern)
 
         with ThreadPoolExecutor(max_workers=len(files)) as executor:
@@ -122,11 +117,14 @@ class Inventory:
         Returns:
             DataFrame: Polars DataFrame.
         """
-
         def _to_list(lst: float | list) -> str:
             return ",".join([str(i) for i in lst])
 
         return df.with_columns(
+            pl.col("adc_vref").map_elements(
+                _to_list,
+                return_dtype=pl.String,
+            ),
             pl.col("gain").map_elements(
                 _to_list,
                 return_dtype=pl.String,
@@ -204,6 +202,9 @@ class Inventory:
         self.df = pl.read_csv(filepath).with_columns(
             pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)),
             pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)),
+            pl.col("adc_vref").map_elements(
+                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+            ),
             pl.col("gain").map_elements(
                 partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
             ),
@@ -270,6 +271,7 @@ class Inventory:
         timestamp_orig_data = cat_data["timestamps_orig"][0][0].transpose(2, 1, 0)
         rhfs_orig = float(cat_data["rhfs_orig"][0][0].squeeze())
         rhfs = float(cat_data["rhfs"][0][0].squeeze())
+        adc_vref = cat_data["adc_vref"][0][0].squeeze().astype(float).tolist()
         fixed_gain = cat_data["gain"][0][0].squeeze().astype(float).tolist()
         hydrophone_sensitivity = (
             cat_data["sensitivity"][0][0].squeeze().astype(float).tolist()
@@ -295,6 +297,7 @@ class Inventory:
                         timestamp_orig=timestamp_orig,
                         sampling_rate=rhfs,
                         sampling_rate_orig=rhfs_orig,
+                        adc_vref=adc_vref,
                         gain=fixed_gain,
                         sensitivity=hydrophone_sensitivity,
                     )
@@ -319,6 +322,7 @@ class Inventory:
         timestamp_orig = []
         sampling_rate = []
         sampling_rate_orig = []
+        adc_vref = []
         gain = []
         sensitivity = []
 
@@ -336,6 +340,7 @@ class Inventory:
                 timestamp_orig.append(record.timestamp_orig)
             sampling_rate.append(record.sampling_rate)
             sampling_rate_orig.append(record.sampling_rate_orig)
+            adc_vref.append(record.adc_vref)
             gain.append(record.gain)
             sensitivity.append(record.sensitivity)
         
@@ -349,6 +354,7 @@ class Inventory:
             "timestamp_orig": timestamp_orig,
             "sampling_rate": sampling_rate,
             "sampling_rate_orig": sampling_rate_orig,
+            "adc_vref": adc_vref,
             "gain": gain,
             "sensitivity": sensitivity,
         }
@@ -392,6 +398,7 @@ class Inventory:
                 "timestamps_orig": convert_dtarray_to_ydarray(timestamps_orig),
                 "rhfs_orig": self.records[0].sampling_rate_orig,
                 "rhfs": self.records[0].sampling_rate,
+                "adc_vref": self.records[0].adc_vref,
                 "gain": self.records[0].gain,
                 "sensitivity": self.records[0].sensitivity,
             }
