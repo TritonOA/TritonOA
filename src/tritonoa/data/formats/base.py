@@ -37,8 +37,9 @@ class DataRecord:
     sampling_rate: float = 1.0
     npts: int | None = None
     nch: int | None = None
-    gain: float = 0.0
-    sensitivity: float = 0.0
+    adc_vref: float | list[float] = 1.0
+    gain: float | list[float] = 0.0
+    sensitivity: float | list[float] = 0.0
 
 
 class FileFormatCheckerMixin:
@@ -87,13 +88,3 @@ def validate_channels(nch: int, channels: int | list[int] | None = None) -> list
             f"Channel {len(channels)} requested but only got {nch} from header."
         )
     return channels
-
-
-# def _validate_channels(channels: list[int], num_channels: int) -> list[int]:
-#     if len(channels) == 0:
-#         channels = list(range(num_channels))  # 	fetch all channels
-#     if len([x for x in channels if (x < 0) or (x > (num_channels - 1))]) != 0:
-#         raise SIOReadError(
-#             "Channel #s must be within range 0 to " + str(num_channels - 1)
-#         )
-#     return channels
