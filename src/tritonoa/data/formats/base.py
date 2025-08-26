@@ -57,6 +57,9 @@ class Header(Protocol):
 
 class BaseReader(ABC):
     @abstractmethod
+    def condition_data(self, raw_data: np.ndarray, *args, **kwargs) -> None: ...
+
+    @abstractmethod
     def read(self, file_path: Path, **kwargs) -> None: ...
 
     @abstractmethod
@@ -64,9 +67,6 @@ class BaseReader(ABC):
 
     @abstractmethod
     def read_raw_data() -> None: ...
-
-    @abstractmethod
-    def condition_data(self, raw_data: np.ndarray, *args, **kwargs) -> None: ...
 
 
 class BaseRecordFormatter(ABC):
