@@ -82,9 +82,11 @@ def convert_dtarray_to_ydarray(
 
 def convert_filename_to_datetime64(
     filename: str,
-    doy_indices: tuple[int, int],
     hour_indices: tuple[int, int],
     minute_indices: tuple[int, int],
+    month_indices: tuple[int, int] | None = None,
+    day_indices: tuple[int, int] | None = None,
+    doy_indices: tuple[int, int] | None = None,
     year_indices: tuple[int, int] | None = None,
     year: int | None = None,
     seconds_indices: tuple[int, int] | None = None,
@@ -94,9 +96,11 @@ def convert_filename_to_datetime64(
 
     Args:
         filename: The filename containing date/time components.
-        doy_indices: (start_index, length) for day-of-year.
         hour_indices: (start_index, length) for hours.
         minute_indices: (start_index, length) for minutes.
+        month_indices: (start_index, length) for month.
+        day_indices: (start_index, length) for day.
+        doy_indices: (start_index, length) for day-of-year.
         year_indices: (start_index, length) for year.
         year: Direct year specification if not in filename.
         seconds_indices: (start_index, length) for seconds.
@@ -104,31 +108,9 @@ def convert_filename_to_datetime64(
     Returns:
         Datetime with microsecond precision.
     """
-    # Extract components
-    doy = int(filename[doy_indices[0] : doy_indices[0] + doy_indices[1]])
-    hour = int(filename[hour_indices[0] : hour_indices[0] + hour_indices[1]])
-    minute = int(filename[minute_indices[0] : minute_indices[0] + minute_indices[1]])
-    # Handle seconds if provided
-    second = 0
-    logging.debug(
-        f"Extracted components from filename '{filename}': "
-        f"doy={doy}, hour={hour}, minute={minute}"
-    )
-    if seconds_indices:
-        # print(seconds_indices[0], seconds_indices[1])
-        second = int(
-            filename[seconds_indices[0] : seconds_indices[0] + seconds_indices[1]]
-        )
-
-    logging.debug(
-        f"Extracted seconds from filename '{filename}': second={second if second else 'N/A'}"
-    )
-
-    # Handle year
+    # Extract year
     if year_indices:
-        # Extract year from filename
         year_str = filename[year_indices[0] : year_indices[0] + year_indices[1]]
-
         # Handle YY format
         if len(year_str) == 2:
             # Assume 20XX for years less than 50, 19XX otherwise
@@ -136,14 +118,52 @@ def convert_filename_to_datetime64(
             year_str = prefix + year_str
 
         year = int(year_str)
-    elif year is None:
-        # Default to current year if not specified
+
+    if year is None:
         year = datetime.now().year
+
+    # Extract day of year
+    if doy_indices is not None:
+        doy = int(filename[doy_indices[0] : doy_indices[0] + doy_indices[1]])
+    elif month_indices is not None and day_indices is not None:
+        month = int(filename[month_indices[0] : month_indices[0] + month_indices[1]])
+        day = int(filename[day_indices[0] : day_indices[0] + day_indices[1]])
+        doy = (datetime(year, month, day) - datetime(year, 1, 1)).days + 1
+    else:
+        raise ValueError(
+            "Either doy_indices or month_indices and day_indices must be provided."
+        )
+
+    # Extract hour and minute
+    hour = int(filename[hour_indices[0] : hour_indices[0] + hour_indices[1]])
+    minute = int(filename[minute_indices[0] : minute_indices[0] + minute_indices[1]])
+
+    # Handle seconds if provided
+    second = 0
+    microsecond = 0
+    logging.debug(
+        f"Extracted components from filename '{filename}': "
+        f"doy={doy}, hour={hour}, minute={minute}"
+    )
+    if seconds_indices:
+        seconds_str = filename[
+            seconds_indices[0] : seconds_indices[0] + seconds_indices[1]
+        ]
+        if "." in seconds_str:
+            second, frac_str = seconds_str.split(".")
+            second = int(second)
+            # Pad fractional part to ensure microsecond precision
+            frac_str = (frac_str + "000000")[:6]
+            microsecond = int(frac_str)
+
+    logging.debug(
+        f"Extracted seconds from filename '{filename}': second={second if second else 'N/A'}"
+    )
 
     logging.debug(f"Final year extracted: {year}")
 
     date = datetime.strptime(f"{year}-{doy}", "%Y-%j").replace(
-        hour=hour, minute=minute, second=second
+        hour=hour, minute=minute, second=second, microsecond=microsecond
     )
     logging.debug(f"Constructed datetime: {date}")
     return np.datetime64(date, TIME_PRECISION)
