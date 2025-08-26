@@ -310,22 +310,47 @@ class Inventory:
         Returns:
             dict: Dictionary of records.
         """
+        filename = []
+        record_number = []
+        file_format = []
+        npts = []
+        nch = []
+        timestamp = []
+        timestamp_orig = []
+        sampling_rate = []
+        sampling_rate_orig = []
+        gain = []
+        sensitivity = []
+
+        for record in self.records:
+            filename.append(str(record.filename))
+            record_number.append(record.record_number)
+            file_format.append(record.file_format)
+            npts.append(record.npts)
+            nch.append(record.nch)
+            if not isinstance(record.timestamp, float):
+                timestamp.append(record.timestamp.astype("int64"))
+                timestamp_orig.append(record.timestamp_orig.astype("int64"))
+            else:
+                timestamp.append(record.timestamp)
+                timestamp_orig.append(record.timestamp_orig)
+            sampling_rate.append(record.sampling_rate)
+            sampling_rate_orig.append(record.sampling_rate_orig)
+            gain.append(record.gain)
+            sensitivity.append(record.sensitivity)
+        
         return {
-            "filename": [str(record.filename) for record in self.records],
-            "record_number": [record.record_number for record in self.records],
-            "file_format": [record.file_format for record in self.records],
-            "npts": [record.npts for record in self.records],
-            "nch": [record.nch for record in self.records],
-            "timestamp": [record.timestamp.astype("int64") for record in self.records],
-            "timestamp_orig": [
-                record.timestamp_orig.astype("int64") for record in self.records
-            ],
-            "sampling_rate": [record.sampling_rate for record in self.records],
-            "sampling_rate_orig": [
-                record.sampling_rate_orig for record in self.records
-            ],
-            "gain": [record.gain for record in self.records],
-            "sensitivity": [record.sensitivity for record in self.records],
+            "filename": filename,
+            "record_number": record_number,
+            "file_format": file_format,
+            "npts": npts,
+            "nch": nch,
+            "timestamp": timestamp,
+            "timestamp_orig": timestamp_orig,
+            "sampling_rate": sampling_rate,
+            "sampling_rate_orig": sampling_rate_orig,
+            "gain": gain,
+            "sensitivity": sensitivity,
         }
 
     def _records_to_mdict(self) -> dict:
