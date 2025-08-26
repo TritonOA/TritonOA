@@ -2,6 +2,7 @@ from typing import Optional
 
 from tritonoa.data.formats.shru import SHRUFileFormat, SHRUReader, SHRURecordFormatter
 from tritonoa.data.formats.sio import SIOFileFormat, SIOReader, SIORecordFormatter
+from tritonoa.data.formats.wav import WAVFileFormat, WAVReader, WAVRecordFormatter
 from tritonoa.data.formats.whoi3dvha import (
     WHOI3DVHAFileFormat,
     WHOI3DVHAReader,
@@ -29,6 +30,8 @@ def get_formatter(
         return SHRURecordFormatter()
     if file_format == SIOFileFormat.FORMAT.value:
         return SIORecordFormatter()
+    if file_format == WAVFileFormat.FORMAT.value:
+        return WAVRecordFormatter()
     if file_format == WHOI3DVHAFileFormat.FORMAT.value:
         return WHOI3DVHARecordFormatter()
     raise ValueError(f"File format {file_format} is not recognized.")
@@ -54,6 +57,8 @@ def get_reader(
         return SHRUReader()
     if file_format == SIOFileFormat.FORMAT.value:
         return SIOReader()
+    if file_format == WAVFileFormat.FORMAT.value:
+        return WAVReader()
     if file_format == WHOI3DVHAFileFormat.FORMAT.value:
         return WHOI3DVHAReader()
     raise ValueError(f"File format {file_format} is not recognized.")
@@ -65,6 +70,8 @@ def validate_file_format(desc: str) -> str:
         return SHRUFileFormat.FORMAT.value
     if SIOFileFormat.is_format(desc):
         return SIOFileFormat.FORMAT.value
+    if WAVFileFormat.is_format(desc):
+        return WAVFileFormat.FORMAT.value
     if WHOI3DVHAFileFormat.is_format(desc):
         return WHOI3DVHAFileFormat.FORMAT.value
     raise ValueError(f"File format cannot be inferred from file extension '{desc}'.")
