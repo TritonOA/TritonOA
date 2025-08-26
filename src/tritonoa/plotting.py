@@ -35,7 +35,7 @@ def plot_ambiguity_surface(
     im = ax.imshow(
         B,
         extent=[min(rvec), max(rvec), min(zvec), max(zvec)],
-        **{**IMSHOW_DEFAULTS, **imshow_kwargs}
+        **{**IMSHOW_DEFAULTS, **imshow_kwargs},
     )
     ax.plot(rvec[src_r_ind], zvec[src_z_ind], **{**PLOT_DEFAULTS, **plot_kwargs})
     ax.invert_yaxis()
@@ -115,7 +115,7 @@ def plot_TL_2d(
     interpolation=None,
     cmap="jet",
     ax=None,
-    **kwargs
+    **kwargs,
 ):
     if ax is None:
         ax = plt.gca()
@@ -134,7 +134,7 @@ def plot_TL_2d(
         vmax=vmax,
         interpolation=interpolation,
         cmap=cmap,
-        **kwargs
+        **kwargs,
     )
 
     if boundaries is not None:
