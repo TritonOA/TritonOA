@@ -12,7 +12,13 @@ import warnings
 
 import numpy as np
 
-import tritonoa.data.formats.base as base
+from tritonoa.data.formats.base import (
+    BaseReader,
+    BaseRecordFormatter,
+    DataRecord,
+    FileFormatCheckerMixin,
+    validate_channels,
+)
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
@@ -31,7 +37,7 @@ BYTES_HDR = 1024
 BYTES_PER_SAMPLE = 3
 
 
-class SHRUFileFormat(base.FileFormatCheckerMixin, Enum):
+class SHRUFileFormat(FileFormatCheckerMixin, Enum):
     FORMAT = "SHRU"
     D23 = ".D23"
 
@@ -153,7 +159,7 @@ class SHRUHeader:
     rhkeyl: str
 
 
-class SHRUReader(base.BaseReader):
+class SHRUReader(BaseReader):
 
     def read(
         self,
@@ -229,7 +235,7 @@ class SHRUReader(base.BaseReader):
             records = [records]
 
         nch = self.get_num_channels(headers)
-        channels = base.validate_channels(nch, channels=channels)
+        channels = validate_channels(nch, channels=channels)
 
         header1 = headers[records[0]]
 
@@ -545,12 +551,12 @@ class SHRUReader(base.BaseReader):
         return headers[0].ch
 
 
-class SHRURecordFormatter(base.BaseRecordFormatter):
+class SHRURecordFormatter(BaseRecordFormatter):
 
     file_format = "SHRU"
 
     @staticmethod
-    def callback(records: list[base.DataRecord]) -> list[base.DataRecord]:
+    def callback(records: list[DataRecord]) -> list[DataRecord]:
         """Format SHRU records.
 
         The time stamp of the first record in the 4-channel SHRU files seem
@@ -588,7 +594,7 @@ class SHRURecordFormatter(base.BaseRecordFormatter):
         conditioner.fill_like_channels(header.ch)
         ts = _get_timestamp(header)
         fs = header.rhfs
-        return base.DataRecord(
+        return DataRecord(
             filename=filename,
             record_number=record_number,
             file_format=self.file_format,
