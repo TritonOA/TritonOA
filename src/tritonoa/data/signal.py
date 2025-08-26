@@ -26,6 +26,7 @@ class SignalParams:
         sensitivity (list[float] | optional): Sensitivity [dB], converts V to uPa. Defaults to 0.0 (no effect).
     """
 
+    adc_vref: float | list[float] = 1.0
     gain: float | list[float] = 0.0
     sensitivity: float | list[float] = 0.0
 
@@ -36,7 +37,11 @@ class SignalParams:
             channels (list): List of channels.
         """
         self.fill_like_channels(num_channels)
-        if len(self.gain) != num_channels or len(self.sensitivity) != num_channels:
+        if (
+            len(self.adc_vref) != num_channels
+            or len(self.gain) != num_channels
+            or len(self.sensitivity) != num_channels
+        ):
             # TODO: Implement specific exception for this.
             raise ValueError(
                 "The number of gains and sensitivities must match the number of channels."
@@ -48,6 +53,8 @@ class SignalParams:
         Args:
             num_channels (int): Number of channels.
         """
+        if not isinstance(self.adc_vref, list):
+            self.adc_vref = [self.adc_vref] * num_channels
         if not isinstance(self.gain, list):
             self.gain = [self.gain] * num_channels
         if not isinstance(self.sensitivity, list):
@@ -152,6 +159,35 @@ def bandstop(
         firstpass = sp.sosfilt(sos, data, axis=1)
         return sp.sosfilt(sos, firstpass[:, :-1], axis=1)[:, :-1]
     return sp.sosfilt(sos, data, axis=1)
+
+
+def convert_voltage_to_pressure(
+    voltage: np.ndarray, linear_sensitivity: list[float]
+) -> tuple[np.ndarray, str]:
+    """Convert voltage data to pressure.
+
+    Args:
+        voltage (np.ndarray): Voltage data.
+
+    Returns:
+        tuple[np.ndarray, str]: Converted data and units.
+    """
+    return voltage / np.array(linear_sensitivity)[:, np.newaxis], "uPa"
+
+def convert_counts_to_voltage(
+    data: np.ndarray, linear_fixed_gain: list[float], adc_vref: list[float], adc_maxvalue: int
+) -> tuple[np.ndarray, str]:
+    """Convert 24-bit data to voltage.
+
+    Args:
+        data (np.ndarray): 24-bit data.
+        fixed_linear_gain (list[float]): Fixed linear gain [V/count].
+
+    Returns:
+        tuple[np.ndarray, str]: Converted data and units.
+    """
+    norm_factor = np.array(adc_vref) / adc_maxvalue / np.array(linear_fixed_gain)
+    return data * norm_factor[:, np.newaxis], "V"
 
 
 def highpass(

@@ -29,7 +29,11 @@ from tritonoa.data.time import (
     correct_clock_drift,
     correct_sampling_rate,
 )
-from tritonoa.data.signal import db_to_linear
+from tritonoa.data.signal import (
+    convert_counts_to_voltage,
+    convert_voltage_to_pressure,
+    db_to_linear,
+)
 
 ADC_HALFSCALE = 2.5  # ADC half scale volts (+/- half scale is ADC i/p range)
 ADC_MAXVALUE = 2**23  # ADC maximum halfscale o/p value, half the 2's complement range
@@ -474,8 +478,8 @@ class SHRUReader(BaseReader):
 
         linear_fixed_gain = db_to_linear(conditioner.gain)
         linear_sensitivity = db_to_linear(conditioner.sensitivity)
-        data, _ = self._convert_to_voltage(data, linear_fixed_gain)
-        return self._convert_to_pressure(data, linear_sensitivity)
+        data, _ = convert_counts_to_voltage(data, linear_fixed_gain)
+        return convert_voltage_to_pressure(data, linear_sensitivity)
 
     @staticmethod
     def _convert_24bit_to_int(
@@ -503,36 +507,6 @@ class SHRUReader(BaseReader):
         # Adjust for sign if necessary (assuming two's complement representation)
         data_24bit[data_24bit >= 2**23] -= 2**24
         return data_24bit.reshape(spts, nch), len(raw_data) // BYTES_PER_SAMPLE
-
-    @staticmethod
-    def _convert_to_pressure(
-        data: np.ndarray, linear_sensitivity: list[float]
-    ) -> tuple[np.ndarray, str]:
-        """Convert voltage data to pressure.
-
-        Args:
-            data (np.ndarray): Voltage data.
-
-        Returns:
-            tuple[np.ndarray, str]: Converted data and units.
-        """
-        return data * np.array(linear_sensitivity)[:, np.newaxis], "uPa"
-
-    @staticmethod
-    def _convert_to_voltage(
-        data: np.ndarray, linear_fixed_gain: list[float]
-    ) -> tuple[np.ndarray, str]:
-        """Convert 24-bit data to voltage.
-
-        Args:
-            data (np.ndarray): 24-bit data.
-            fixed_linear_gain (list[float]): Fixed linear gain [V/count].
-
-        Returns:
-            tuple[np.ndarray, str]: Converted data and units.
-        """
-        norm_factor = ADC_HALFSCALE / ADC_MAXVALUE / np.array(linear_fixed_gain)
-        return data * norm_factor[:, np.newaxis], "V"
 
     def get_data_record(
         self, fid: BinaryIO, nch: int, spts: int
