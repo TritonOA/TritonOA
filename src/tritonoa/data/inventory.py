@@ -334,9 +334,11 @@ class Inventory:
             nch.append(record.nch)
             if not isinstance(record.timestamp, float):
                 timestamp.append(record.timestamp.astype("int64"))
-                timestamp_orig.append(record.timestamp_orig.astype("int64"))
             else:
                 timestamp.append(record.timestamp)
+            if not isinstance(record.timestamp_orig, float):
+                timestamp_orig.append(record.timestamp_orig.astype("int64"))
+            else:
                 timestamp_orig.append(record.timestamp_orig)
             sampling_rate.append(record.sampling_rate)
             sampling_rate_orig.append(record.sampling_rate_orig)
