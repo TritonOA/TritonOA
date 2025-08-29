@@ -169,16 +169,21 @@ def read_inventory(
             0, pl.Series("row_nr", list(range(len(df))))
         )
 
-    def _get_gains_and_sensitivities(
+    def _get_conditioning_params(
         df: pl.DataFrame,
         num_timestamps: int,
     ) -> tuple[list[float], list[float]]:
+        adc_vrefs = df.unique(subset=["filename"])["adc_vref"].to_list()[0]
         gains = df.unique(subset=["filename"])["gain"].to_list()[0]
         sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()[0]
         if channels is not None:
             gains = [gains[i] for i in channels]
             sensitivities = [sensitivities[i] for i in channels]
-        return [gains] * num_timestamps, [sensitivities] * num_timestamps
+        return (
+            [adc_vrefs] * num_timestamps,
+            [gains] * num_timestamps,
+            [sensitivities] * num_timestamps,
+        )
 
     def _get_sampling_rate(df: pl.DataFrame) -> float:
         sampling_rates = (
@@ -209,7 +214,7 @@ def read_inventory(
         Path(f) for f in sorted(df.unique(subset=["filename"])["filename"].to_list())
     ]
     timestamps = sorted(df.unique(subset=["filename"])["timestamp"].to_numpy())
-    gains, sensitivities = _get_gains_and_sensitivities(df, len(timestamps))
+    adc_vrefs, gains, sensitivities = _get_conditioning_params(df, len(timestamps))
     sampling_rate = _get_sampling_rate(df)
 
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
@@ -222,8 +227,8 @@ def read_inventory(
     time_stop = None
     max_time_gap = 1 / sampling_rate
 
-    for filename, timestamp, gain, sensitivity in zip(
-        filenames, timestamps, gains, sensitivities
+    for filename, timestamp, adc_vref, gain, sensitivity in zip(
+        filenames, timestamps, adc_vrefs, gains, sensitivities
     ):
         logging.debug(f"Reading {filename} at {timestamp}.")
         # Define 'time_init' for waveform:
@@ -255,7 +260,9 @@ def read_inventory(
         raw_data, _ = reader.read_raw_data(filename, records=rec_ind, channels=channels)
         logging.debug(f"Raw data shape: {raw_data.shape}.")
         # Condition data and get units:
-        data, units = reader.condition_data(raw_data, SignalParams(gain, sensitivity))
+        data, units = reader.condition_data(
+            raw_data, SignalParams(adc_vref, gain, sensitivity)
+        )
         logging.debug(f"Conditioned data shape: {raw_data.shape}.")
         # Store data in waveform & advance marker by data length:
         waveform[:, marker : marker + data.shape[1]] = data
