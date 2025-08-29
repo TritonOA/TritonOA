@@ -205,13 +205,13 @@ class Inventory:
             pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)),
             pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)),
             pl.col("adc_vref").map_elements(
-                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
+                _enforce_list_of_floats, return_dtype=pl.List(float)
             ),
             pl.col("gain").map_elements(
-                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
+                _enforce_list_of_floats, return_dtype=pl.List(float)
             ),
             pl.col("sensitivity").map_elements(
-                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
+                _enforce_list_of_floats, return_dtype=pl.List(float)
             ),
         )
 
