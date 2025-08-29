@@ -47,7 +47,7 @@ class WAVHeader:
 
     @property
     def bit_depth(self) -> int:
-        return self.bytes_per_sample * 8
+        return int(self.bytes_per_sample * 8)
 
 
 class WAVReader(BaseReader):
@@ -65,10 +65,9 @@ class WAVReader(BaseReader):
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
         raw_data, header = self.read_raw_data(file_path, channels=channels)
-
-        data, units = self.condition_data(
-            raw_data, conditioner=conditioner, bit_depth=header.bit_depth
-        )
+        self.bit_depth: int = header.bit_depth
+        
+        data, units = self.condition_data(raw_data, conditioner=conditioner)
 
         return DataStream(
             stats=DataStreamStats(
@@ -117,9 +116,8 @@ class WAVReader(BaseReader):
         return data, header
 
     def condition_data(
-        self, raw_data: ArrayLike, conditioner: SignalParams, bit_depth: int
+        self, raw_data: ArrayLike, conditioner: SignalParams
     ) -> tuple[NDArray[np.float64], None]:
-        # return raw_data, "counts"
         try:
             conditioner.check_dimensions(raw_data.shape[0])
         except ValueError as e:
@@ -134,13 +132,13 @@ class WAVReader(BaseReader):
 
         linear_fixed_gain = db_to_linear(conditioner.gain)
         linear_sensitivity = db_to_linear(conditioner.sensitivity)
-        ADC_max = 2 ** (bit_depth - 1) - 1
+        ADC_max = 2 ** (self.bit_depth - 1) - 1
 
         voltage, _ = convert_counts_to_voltage(
             raw_data, linear_fixed_gain, conditioner.adc_vref, ADC_max
         )
         return convert_voltage_to_pressure(voltage, linear_sensitivity)
-
+    
 
 class WAVRecordFormatter(BaseRecordFormatter):
     file_format = "WAV"
