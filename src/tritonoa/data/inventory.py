@@ -194,24 +194,24 @@ class Inventory:
             None
         """
 
-        def _str_to_list(s: str, dtype=float) -> list:
-            if s == "nan":
+        def _enforce_list_of_floats(s: str) -> list:
+            if s in ("nan", "null", "None", ""):
                 return []
             if isinstance(s, float):
-                return [float]
-            return [dtype(i) for i in s.split(",") if i]
+                return [s]
+            return [float(i) for i in s.split(",") if i]
 
         self.df = pl.read_csv(filepath).with_columns(
             pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)),
             pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)),
             pl.col("adc_vref").map_elements(
-                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
             ),
             pl.col("gain").map_elements(
-                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
             ),
             pl.col("sensitivity").map_elements(
-                partial(_str_to_list, dtype=float), return_dtype=pl.List(float)
+                partial(_enforce_list_of_floats, dtype=float), return_dtype=pl.List(float)
             ),
         )
 
