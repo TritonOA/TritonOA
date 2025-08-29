@@ -4,7 +4,7 @@
 # except ImportError:
 # import scipy.signal as signal
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Iterable
 import warnings
 
@@ -22,13 +22,14 @@ class SignalParams:
     """Specifications for one or more hydrophones.
 
     Args:
-        gain (list[float] | optional): Gain [dB], converts counts to V. Defaults to 0.0 (no effect).
-        sensitivity (list[float] | optional): Sensitivity [dB], converts V to uPa. Defaults to 0.0 (no effect).
+        adc_vref: ADC reference voltage [V]. Defaults to 1.0 (no effect).
+        gain: Gain [dB], converts counts to V. Defaults to 0.0 (no effect).
+        sensitivity: Sensitivity [dB], converts V to uPa. Defaults to 0.0 (no effect).
     """
 
-    adc_vref: float | list[float] = 1.0
-    gain: float | list[float] = 0.0
-    sensitivity: float | list[float] = 0.0
+    adc_vref: list[float] = field(default_factory=lambda: [1.0])
+    gain: list[float] = field(default_factory=lambda: [0.0])
+    sensitivity: list[float] = field(default_factory=lambda: [0.0])
 
     def check_dimensions(self, num_channels: int):
         """Checks if the dimensions of the parameters match the channels.
