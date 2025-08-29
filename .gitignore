@@ -178,6 +178,7 @@ dev
 tests
 tutorials/XBT.csv
 tritonoa/at/bin
+uv.lock
 
 !RunBELLHOP.ipynb
 !RunKRAKEN.ipynb
