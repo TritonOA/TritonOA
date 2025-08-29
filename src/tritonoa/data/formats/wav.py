@@ -65,7 +65,6 @@ class WAVReader(BaseReader):
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
         raw_data, header = self.read_raw_data(file_path, channels=channels)
-        self.bit_depth: int = header.bit_depth
         
         data, units = self.condition_data(raw_data, conditioner=conditioner)
 
@@ -113,6 +112,7 @@ class WAVReader(BaseReader):
             data = data[channels, :]
             header.num_channels = len(channels)
 
+        self.bit_depth = header.bit_depth
         return data, header
 
     def condition_data(
