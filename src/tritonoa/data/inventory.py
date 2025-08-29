@@ -197,6 +197,8 @@ class Inventory:
         def _str_to_list(s: str, dtype=float) -> list:
             if s == "nan":
                 return []
+            if isinstance(s, float):
+                return [float]
             return [dtype(i) for i in s.split(",") if i]
 
         self.df = pl.read_csv(filepath).with_columns(
@@ -248,7 +250,7 @@ class Inventory:
             .with_columns(pl.col("timestamp").cast(pl.Datetime(TIME_PRECISION)))
             .with_columns(pl.col("timestamp_orig").cast(pl.Datetime(TIME_PRECISION)))
             .sort(by="timestamp")
-            .with_row_count()
+            .with_row_index()
         )
 
     def _mdict_to_records(self, mdict: dict) -> list[DataRecord]:
