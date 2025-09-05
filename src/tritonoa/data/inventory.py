@@ -1,11 +1,9 @@
-# TODO: Replace hydrophone specs w/ signal params
-
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import partial
 import logging
 from pathlib import Path
+import resource
 from typing import Callable, Protocol
 
 from polars import DataFrame
@@ -93,7 +91,8 @@ class Inventory:
 
         files = self._get_files(dataset_path, glob_pattern)
 
-        with ThreadPoolExecutor(max_workers=len(files)) as executor:
+        max_workers = min(len(files), resource.getrlimit(resource.RLIMIT_NOFILE)[0] // 2)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(
                 tqdm(
                     executor.map(_process_file, files),
