@@ -17,13 +17,16 @@ from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION
 
 MAX_BUFFER = int(2e9)
 
+logger = logging.getLogger(__name__)
 
 class BufferExceededWarning(Warning):
     pass
 
 
 class DataDiscontinuityWarning(Warning):
-    pass
+    def __init__(self, message: str, log_level: int = logging.WARNING):
+        super().__init__(message)
+        logger.log(log_level, f"DataDiscontinuityWarning: {message}")
 
 
 class NoDataError(Exception):
@@ -202,7 +205,7 @@ def read_inventory(
 
     if len(df) == 0:
         raise NoDataError("No data found for the given query parameters.")
-    logging.debug(f"Reading {len(df)} records.")
+    logger.debug(f"Reading {len(df)} records.")
 
     if channels is None:
         num_channels = _get_nchannels(df)
@@ -218,9 +221,9 @@ def read_inventory(
     sampling_rate = _get_sampling_rate(df)
 
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
-    logging.debug(f"Initializing buffer...")
+    logger.debug(f"Initializing buffer...")
     waveform = -2009.0 * np.ones((num_channels, expected_buffer), dtype=np.float64)
-    logging.debug(f"Buffer initialized: {waveform.shape}.")
+    logger.debug(f"Buffer initialized: {waveform.shape}.")
 
     marker = 0
     time_init = None
@@ -230,45 +233,53 @@ def read_inventory(
     for filename, timestamp, adc_vref, gain, sensitivity in zip(
         filenames, timestamps, adc_vrefs, gains, sensitivities
     ):
-        logging.debug(f"Reading {filename} at {timestamp}.")
+        logger.debug(f"Reading {filename} at {timestamp}.")
         # Define 'time_init' for waveform:
         if time_init is None:
             time_init = timestamp
+        
         # Check time gap between files and stop if files are not continuous:
-        if time_stop is not None and _exceeds_max_time_gap(
-            timestamp, time_stop, max_time_gap
-        ):
-            warnings.warn(
-                "Files are not continuous; time gap between files is greater than 1/sampling_rate.\n"
-                f"    Stopping at {filename} at {time_end}.",
-                DataDiscontinuityWarning,
+        if time_stop is not None:
+            exceeds_max_time_gap, time_gap = _exceeds_max_time_gap(
+                timestamp, time_stop, max_time_gap
             )
-            break
+            if exceeds_max_time_gap:
+        # if time_stop is not None and exceeds_max_time_gap:
+                warnings.warn(
+                    (
+                        f"Files are not continuous; time gap ({time_gap} s or "
+                        f"{1 / time_gap} Hz) between files is greater than "
+                        f"1/sampling_rate ({max_time_gap} s or {1 / max_time_gap:,} Hz). "
+                        f"Stopping at {filename} at {time_end}."
+                    ),
+                    DataDiscontinuityWarning,
+                )
+                break
 
         # Get record numbers for the file:
         rec_ind = df.filter(pl.col("filename") == str(filename))[
             "record_number"
         ].to_list()
-        logging.debug(f"Reading records {rec_ind} from {filename}.")
+        logger.debug(f"Reading records {rec_ind} from {filename}.")
 
         # Read data from file; header is not used here:
-        logging.debug("Reading raw data.")
+        logger.debug("Reading raw data.")
         if file_format is None:
             reader = factory.get_reader(filename.suffix)
         else:
             reader = factory.get_reader(file_format)
         raw_data, _ = reader.read_raw_data(filename, records=rec_ind, channels=channels)
-        logging.debug(f"Raw data shape: {raw_data.shape}.")
+        logger.debug(f"Raw data shape: {raw_data.shape}.")
         # Condition data and get units:
         data, units = reader.condition_data(
             raw_data, SignalParams(adc_vref, gain, sensitivity)
         )
-        logging.debug(f"Conditioned data shape: {raw_data.shape}.")
+        logger.debug(f"Conditioned data shape: {raw_data.shape}.")
         # Store data in waveform & advance marker by data length:
         waveform[:, marker : marker + data.shape[1]] = data
-        logging.debug(f"Old marker at {marker}.")
+        logger.debug(f"Old marker at {marker}.")
         marker += data.shape[1]
-        logging.debug(f"New marker at {marker}.")
+        logger.debug(f"New marker at {marker}.")
         # Compute time of last point in waveform:
         time_stop = timestamp + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * data.shape[1] / sampling_rate), TIME_PRECISION
@@ -331,7 +342,7 @@ def _compute_expected_buffer(df: pl.DataFrame) -> int:
         expected_samples += df.filter(
             (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
         )["npts"].sum()
-    logging.debug(f"Expected samples: {expected_samples}")
+    logger.debug(f"Expected samples: {expected_samples}")
     return expected_samples
 
 
@@ -339,11 +350,11 @@ def _exceeds_max_time_gap(
     timestamp: np.datetime64,
     time_end: np.datetime64,
     max_time_gap: float,
-) -> bool:
+) -> tuple[bool, float]:
     time_gap = abs(timestamp - time_end) / np.timedelta64(1, "s")
     if time_gap > max_time_gap:
-        return True
-    return False
+        return True, time_gap
+    return False, time_gap
 
 
 def _get_nchannels(df: pl.DataFrame) -> int:
@@ -361,7 +372,7 @@ def _report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None
     Returns:
         None
     """
-    logging.debug(
+    logger.debug(
         f"MAX BUFFER ---- length: {buffer:e} samples | "
         f"length per channel: {int(buffer / num_channels)} samples | "
         f"size: {8 * buffer / 1e6:n} MB | "
@@ -375,23 +386,23 @@ def _select_records_by_time(
     time_end: np.datetime64 | None = None,
 ) -> pl.DataFrame:
     """Select files by time."""
-    logging.debug(f"Selecting records by time: {time_start} to {time_end}.")
+    logger.debug(f"Selecting records by time: {time_start} to {time_end}.")
     if time_start is None and time_end is None:
-        logging.debug("No times provided; returning all rows.")
+        logger.debug("No times provided; returning all rows.")
         return df
     if time_start is not None and time_end is None:
-        logging.debug("Only start time provided; returning all rows after.")
+        logger.debug("Only start time provided; returning all rows after.")
         row_numbers = df.filter(pl.col("timestamp") >= time_start)["row_nr"].to_list()
         row_numbers.insert(0, row_numbers[0] - 1)
         mask = pl.col("row_nr").is_in(row_numbers)
         return df.filter(mask)
     if time_start is None and time_end is not None:
-        logging.debug("Only end time provided; returning all rows before.")
+        logger.debug("Only end time provided; returning all rows before.")
         return df.filter(pl.col("timestamp") < time_end)
     if time_start > time_end:
         raise ValueError("time_start must be less than time_end.")
 
-    logging.debug("Start and end times provided; returning rows between.")
+    logger.debug("Start and end times provided; returning rows between.")
     last_row_before_start = df.filter(pl.col("timestamp") <= time_start)["row_nr"].max()
     row_numbers = df.filter(
         (pl.col("timestamp") >= time_start) & (pl.col("timestamp") < time_end)
