@@ -449,9 +449,7 @@ class DataStream:
 
     def write_wav(self, path: Path) -> None:
         """Writes data to WAV file."""
-        scipy.io.wavfile.write(
-            path, int(self.stats.sampling_rate), self.data.T
-        )
+        scipy.io.wavfile.write(path, int(self.stats.sampling_rate), self.data.T)
 
     def _ltrim(
         self,
@@ -667,6 +665,7 @@ def pipeline(
     ds: DataStream,
     detrend: bool = True,
     taper_pc: float | None = None,
+    taper_duration: float | None = None,
     dec_factor: int | None = None,
     filt_type: str | None = None,
     filt_freq: float | Sequence[float] | None = None,
@@ -678,6 +677,7 @@ def pipeline(
         ds (DataStream): The DataStream object to process.
         detrend (bool, optional): Whether to detrend the data. Defaults to True.
         taper_pc (float | None, optional): Percentage of taper to apply. Defaults to None.
+        taper_duration (float | None, optional): Duration of taper in seconds. Defaults to None.
         dec_factor (int | None, optional): Decimation factor. Defaults to None.
         filt_type (str | None, optional): Type of filter to apply. Defaults to None.
         filt_freq (float | Sequence[float] | None, optional): Frequency or frequencies
@@ -687,12 +687,17 @@ def pipeline(
     Returns:
         DataStream: The processed DataStream object.
     """
+    if taper_pc and taper_duration:
+        raise ValueError("Only one of taper_pc or taper_duration can be specified.")
+
     if detrend:
         ds.detrend(**detrend_kwargs)
-    if taper_pc is not None:
+    if taper_pc:
         ds.taper(max_percentage=taper_pc)
-    if dec_factor is not None:
+    if taper_duration:
+        ds.taper(max_length=taper_duration * ds.stats.sampling_rate)
+    if dec_factor:
         ds.decimate(dec_factor)
-    if filt_type is not None and filt_freq is not None:
+    if filt_type and filt_freq:
         ds.filter(filt_type, filt_freq)
     return ds
