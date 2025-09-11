@@ -19,6 +19,7 @@ MAX_BUFFER = int(2e9)
 
 logger = logging.getLogger(__name__)
 
+
 class BufferExceededWarning(Warning):
     pass
 
@@ -111,8 +112,20 @@ def read_hdf5_group(
     Returns:
         DataStream: Data stream object with loaded data and statistics.
     """
+    stats = read_hdf5_stats(group)
     data = group["data"][:]
+    return DataStream(stats=stats, data=data)
 
+
+def read_hdf5_stats(group: h5py.Group) -> DataStreamStats:
+    """Read DataStreamStats from an HDF5 group.
+
+    Args:
+        group (h5py.Group): HDF5 group containing the stats.
+
+    Returns:
+        DataStreamStats: DataStreamStats object with loaded statistics.
+    """
     stats_dict = {}
     for key in [
         "channels",
@@ -140,7 +153,7 @@ def read_hdf5_group(
         if dt_key in stats_dict:
             stats_dict[dt_key] = np.datetime64(stats_dict[dt_key])
 
-    return DataStream(stats=DataStreamStats(**stats_dict), data=data)
+    return DataStreamStats(**stats_dict)
 
 
 def read_inventory(
@@ -237,14 +250,14 @@ def read_inventory(
         # Define 'time_init' for waveform:
         if time_init is None:
             time_init = timestamp
-        
+
         # Check time gap between files and stop if files are not continuous:
         if time_stop is not None:
             exceeds_max_time_gap, time_gap = _exceeds_max_time_gap(
                 timestamp, time_stop, max_time_gap
             )
             if exceeds_max_time_gap:
-        # if time_stop is not None and exceeds_max_time_gap:
+                # if time_stop is not None and exceeds_max_time_gap:
                 warnings.warn(
                     (
                         f"Files are not continuous; time gap ({time_gap} s or "
