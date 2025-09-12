@@ -13,7 +13,7 @@ from tritonoa.data.inventory import Inventory
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats, pipeline
-from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION
+from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION, datetime_linspace
 
 MAX_BUFFER = int(2e9)
 
@@ -88,32 +88,60 @@ def read_and_process(
     )
 
 
-def read_hdf5(path: Path) -> DataStream:
+def read_hdf5(path: Path, start: int = 0, stop: int = -1) -> DataStream:
     """Read data from an HDF5 file and returns a DataStream object.
 
     Args:
         path (Path): Path to the HDF5 file.
+        start (int): Start index for slicing the data.
+        stop (int): Stop index for slicing the data.
 
     Returns:
         DataStream: Data stream object with loaded data and statistics.
     """
     with h5py.File(path, "r") as f:
-        return read_hdf5_group(f)
+        return read_hdf5_group(f, start=start, stop=stop)
 
 
 def read_hdf5_group(
     group: h5py.Group,
+    start: int = 0,
+    stop: int = -1,
 ) -> DataStream:
     """Read data from an HDF5 group and returns a DataStream object.
 
     Args:
         group (h5py.Group): HDF5 group containing the data.
+        start (int): Start index for slicing the data.
+        stop (int): Stop index for slicing the data.
 
     Returns:
         DataStream: Data stream object with loaded data and statistics.
     """
+
+    def _update_times(
+        time_init: np.datetime64,
+        time_end: np.datetime64,
+        num_samples: int,
+        start: int,
+        stop: int,
+    ) -> np.ndarray:
+        dtvec = datetime_linspace(start=time_init, end=time_end, num=num_samples)[
+            start:stop
+        ]
+        return dtvec[0], dtvec[-1]
+
+    num_samples = group["data"].shape[1]
+    data = group["data"][:, start:stop]
     stats = read_hdf5_stats(group)
-    data = group["data"][:]
+
+    if start != 0 or stop != -1:
+        new_time_init, new_time_end = _update_times(
+            stats.time_init, stats.time_end, num_samples, start, stop
+        )
+        stats.time_init = new_time_init
+        stats.time_end = new_time_end
+
     return DataStream(stats=stats, data=data)
 
 
