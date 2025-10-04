@@ -229,18 +229,6 @@ def read_inventory(
             [sensitivities] * num_timestamps,
         )
 
-    def _get_sampling_rate(df: pl.DataFrame) -> float:
-        sampling_rates = (
-            df.unique(subset=["filename"])
-            .unique(subset=["sampling_rate"])["sampling_rate"]
-            .to_list()
-        )
-        if len(set(sampling_rates)) > 1:
-            raise ValueError(
-                "Multiple sampling rates found in the inventory; unable to proceed."
-            )
-        return sampling_rates[0]
-
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
@@ -400,6 +388,19 @@ def _exceeds_max_time_gap(
 
 def _get_nchannels(df: pl.DataFrame) -> int:
     return len(df.select(pl.first("gain")).item())
+
+
+def _get_sampling_rate(df: pl.DataFrame) -> float:
+    sampling_rates = (
+        df.unique(subset=["filename"])
+        .unique(subset=["sampling_rate"])["sampling_rate"]
+        .to_list()
+    )
+    if len(set(sampling_rates)) > 1:
+        raise ValueError(
+            "Multiple sampling rates found in the inventory; unable to proceed."
+        )
+    return sampling_rates[0]
 
 
 def _report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None:
