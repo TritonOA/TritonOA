@@ -13,7 +13,12 @@ from tritonoa.data.inventory import Inventory
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats, pipeline
-from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION, datetime_linspace
+from tritonoa.data.time import (
+    TIME_CONVERSION_FACTOR,
+    TIME_PRECISION,
+    datetime_linspace,
+    datetime_range,
+)
 
 MAX_BUFFER = int(2e9)
 
@@ -365,13 +370,21 @@ def _compute_expected_buffer(df: pl.DataFrame) -> int:
     Returns:
         int: Expected samples.
     """
-    expected_samples = 0
-    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
-        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
-        expected_samples += df.filter(
-            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
-        )["npts"].sum()
-    logger.debug(f"Expected samples: {expected_samples}")
+
+    dt = 1.0 / _get_sampling_rate(df)
+    t0, t1 = df["timestamp"][0], df["timestamp"][-1]
+    expected_samples = int(
+        datetime_range(t0, t1, int(dt * TIME_CONVERSION_FACTOR)).size + df["npts"][-1]
+    )
+
+    # expected_samples = 0
+
+    # for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
+    #     rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
+    #     expected_samples += df.filter(
+    #         (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
+    #     )["npts"].sum()
+    # logger.debug(f"Expected samples: {expected_samples}")
     return expected_samples
 
 
