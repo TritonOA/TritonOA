@@ -202,8 +202,15 @@ def read_inventory(
     """Read data from inventory using the query parameters.
 
     Args:
-        query (InventoryQuery): Query parameters.
-        max_buffer (int): Maximum buffer length in samples.
+        file_path: Path to the inventory file.
+        time_start: Start time for data selection.
+        time_end: End time for data selection.
+        channels: Channel indices to read. If None, all channels are read.
+        metadata: Additional metadata to attach to the DataStream.
+        max_buffer: Maximum buffer length in samples.
+        file_format: File format to use for reading data (e.g., 'WAV', 'SIO').
+            If `None`, the format is inferred from the file extension.
+        missing_value: Value to use for missing data.
 
     Returns:
         DataStream: Data stream object.
