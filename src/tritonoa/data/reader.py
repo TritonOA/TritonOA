@@ -197,6 +197,7 @@ def read_inventory(
     metadata: dict | None = None,
     max_buffer: int = MAX_BUFFER,
     file_format: str | None = None,
+    missing_value: float = 0.0,
 ) -> DataStream:
     """Read data from inventory using the query parameters.
 
@@ -255,9 +256,10 @@ def read_inventory(
     sampling_rate = _get_sampling_rate(df)
 
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
-    logger.debug(f"Initializing buffer...")
     logger.debug(f"Expected samples: {expected_buffer}")
-    waveform = -2009.0 * np.ones((num_channels, expected_buffer), dtype=np.float64)
+    waveform = missing_value * np.ones(
+        (num_channels, expected_buffer), dtype=np.float64
+    )
     logger.debug(f"Buffer initialized: {waveform.shape}.")
 
     # Initialize time reference from first file
@@ -360,7 +362,7 @@ def _compute_expected_buffer(df: pl.DataFrame) -> int:
     """
 
     dt = 1.0 / _get_sampling_rate(df)
-    t0, t1 = df["timestamp"][0], df["timestamp"][-1]
+    t0, t1 = df["timestamp"].to_numpy()[0], df["timestamp"].to_numpy()[-1]
     return int(
         datetime_range(t0, t1, int(dt * TIME_CONVERSION_FACTOR)).size + df["npts"][-1]
     )
