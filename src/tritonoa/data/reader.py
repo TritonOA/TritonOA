@@ -13,7 +13,12 @@ from tritonoa.data.inventory import Inventory
 import tritonoa.data.formats.factory as factory
 from tritonoa.data.signal import SignalParams
 from tritonoa.data.stream import DataStream, DataStreamStats, pipeline
-from tritonoa.data.time import TIME_CONVERSION_FACTOR, TIME_PRECISION, datetime_linspace
+from tritonoa.data.time import (
+    TIME_CONVERSION_FACTOR,
+    TIME_PRECISION,
+    datetime_linspace,
+    datetime_range,
+)
 
 MAX_BUFFER = int(2e9)
 
@@ -192,6 +197,7 @@ def read_inventory(
     metadata: dict | None = None,
     max_buffer: int = MAX_BUFFER,
     file_format: str | None = None,
+    missing_value: float = 0.0,
 ) -> DataStream:
     """Read data from inventory using the query parameters.
 
@@ -229,18 +235,6 @@ def read_inventory(
             [sensitivities] * num_timestamps,
         )
 
-    def _get_sampling_rate(df: pl.DataFrame) -> float:
-        sampling_rates = (
-            df.unique(subset=["filename"])
-            .unique(subset=["sampling_rate"])["sampling_rate"]
-            .to_list()
-        )
-        if len(set(sampling_rates)) > 1:
-            raise ValueError(
-                "Multiple sampling rates found in the inventory; unable to proceed."
-            )
-        return sampling_rates[0]
-
     catalog = Inventory().load(file_path)
     df = _select_records_by_time(_enforce_sorted_df(catalog), time_start, time_end)
 
@@ -262,40 +256,26 @@ def read_inventory(
     sampling_rate = _get_sampling_rate(df)
 
     expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
-    logger.debug(f"Initializing buffer...")
-    waveform = -2009.0 * np.ones((num_channels, expected_buffer), dtype=np.float64)
+    logger.debug(f"Expected samples: {expected_buffer}")
+    waveform = missing_value * np.ones(
+        (num_channels, expected_buffer), dtype=np.float64
+    )
     logger.debug(f"Buffer initialized: {waveform.shape}.")
 
-    marker = 0
-    time_init = None
+    # Initialize time reference from first file
+    time_init = timestamps[0]
     time_stop = None
-    max_time_gap = 1 / sampling_rate
 
     for filename, timestamp, adc_vref, gain, sensitivity in zip(
         filenames, timestamps, adc_vrefs, gains, sensitivities
     ):
         logger.debug(f"Reading {filename} at {timestamp}.")
-        # Define 'time_init' for waveform:
-        if time_init is None:
-            time_init = timestamp
 
-        # Check time gap between files and stop if files are not continuous:
-        if time_stop is not None:
-            exceeds_max_time_gap, time_gap = _exceeds_max_time_gap(
-                timestamp, time_stop, max_time_gap
-            )
-            if exceeds_max_time_gap:
-                # if time_stop is not None and exceeds_max_time_gap:
-                warnings.warn(
-                    (
-                        f"Files are not continuous; time gap ({time_gap} s or "
-                        f"{1 / time_gap} Hz) between files is greater than "
-                        f"1/sampling_rate ({max_time_gap} s or {1 / max_time_gap:,} Hz). "
-                        f"Stopping at {filename} at {time_end}."
-                    ),
-                    DataDiscontinuityWarning,
-                )
-                break
+        # Calculate the index position for this file based on its timestamp
+        time_offset = (timestamp - time_init) / np.timedelta64(1, "s")
+        start_index = int(time_offset * sampling_rate)
+
+        logger.debug(f"Time offset: {time_offset} s, start index: {start_index}")
 
         # Get record numbers for the file:
         rec_ind = df.filter(pl.col("filename") == str(filename))[
@@ -315,19 +295,22 @@ def read_inventory(
         data, units = reader.condition_data(
             raw_data, SignalParams(adc_vref, gain, sensitivity)
         )
-        logger.debug(f"Conditioned data shape: {raw_data.shape}.")
-        # Store data in waveform & advance marker by data length:
-        waveform[:, marker : marker + data.shape[1]] = data
-        logger.debug(f"Old marker at {marker}.")
-        marker += data.shape[1]
-        logger.debug(f"New marker at {marker}.")
-        # Compute time of last point in waveform:
+        logger.debug(f"Conditioned data shape: {data.shape}.")
+
+        # Store data at correct index position in waveform:
+        end_index = start_index + data.shape[1]
+        if end_index > expected_buffer:
+            logger.warning(f"File extends beyond buffer, truncating.")
+            end_index = expected_buffer
+            data = data[:, : expected_buffer - start_index]
+
+        waveform[:, start_index:end_index] = data
+        logger.debug(f"Stored data at indices {start_index}:{end_index}.")
+
+        # Compute time of last point in this file:
         time_stop = timestamp + np.timedelta64(
             int(TIME_CONVERSION_FACTOR * data.shape[1] / sampling_rate), TIME_PRECISION
         )
-
-    if marker < expected_buffer:
-        waveform = waveform[:, :marker]
 
     return DataStream(
         stats=DataStreamStats(
@@ -377,14 +360,12 @@ def _compute_expected_buffer(df: pl.DataFrame) -> int:
     Returns:
         int: Expected samples.
     """
-    expected_samples = 0
-    for filename in sorted(df.unique(subset=["filename"])["filename"].to_list()):
-        rec_ind = df.filter(pl.col("filename") == filename)["record_number"].to_list()
-        expected_samples += df.filter(
-            (pl.col("filename") == filename) & (pl.col("record_number").is_in(rec_ind))
-        )["npts"].sum()
-    logger.debug(f"Expected samples: {expected_samples}")
-    return expected_samples
+
+    dt = 1.0 / _get_sampling_rate(df)
+    t0, t1 = df["timestamp"].to_numpy()[0], df["timestamp"].to_numpy()[-1]
+    return int(
+        datetime_range(t0, t1, int(dt * TIME_CONVERSION_FACTOR)).size + df["npts"][-1]
+    )
 
 
 def _exceeds_max_time_gap(
@@ -400,6 +381,19 @@ def _exceeds_max_time_gap(
 
 def _get_nchannels(df: pl.DataFrame) -> int:
     return len(df.select(pl.first("gain")).item())
+
+
+def _get_sampling_rate(df: pl.DataFrame) -> float:
+    sampling_rates = (
+        df.unique(subset=["filename"])
+        .unique(subset=["sampling_rate"])["sampling_rate"]
+        .to_list()
+    )
+    if len(set(sampling_rates)) > 1:
+        raise ValueError(
+            "Multiple sampling rates found in the inventory; unable to proceed."
+        )
+    return sampling_rates[0]
 
 
 def _report_buffer(buffer: int, num_channels: int, sampling_rate: float) -> None:

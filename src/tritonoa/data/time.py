@@ -272,3 +272,11 @@ def datetime_linspace(start: np.datetime64, end: np.datetime64, num: int) -> np.
     return np.linspace(start_int, end_int, num, dtype="int64").astype(
         f"datetime64[{TIME_PRECISION}]"
     )
+
+
+def datetime_range(start: np.datetime64, end: np.datetime64, step: int) -> np.ndarray:
+    start_int = start.astype("int64")
+    end_int = end.astype("int64")
+    return np.arange(start_int, end_int, step, dtype="int64").astype(
+        f"datetime64[{TIME_PRECISION}]"
+    )
