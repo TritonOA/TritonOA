@@ -91,7 +91,9 @@ class Inventory:
 
         files = self._get_files(dataset_path, glob_pattern)
 
-        max_workers = min(len(files), resource.getrlimit(resource.RLIMIT_NOFILE)[0] // 2)
+        max_workers = min(
+            len(files), resource.getrlimit(resource.RLIMIT_NOFILE)[0] // 2, 64
+        )
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(
                 tqdm(
@@ -116,6 +118,7 @@ class Inventory:
         Returns:
             DataFrame: Polars DataFrame.
         """
+
         def _to_list(lst: float | list) -> str:
             return ",".join([str(i) for i in lst])
 
@@ -346,7 +349,7 @@ class Inventory:
             adc_vref.append(record.adc_vref)
             gain.append(record.gain)
             sensitivity.append(record.sensitivity)
-        
+
         return {
             "filename": filename,
             "record_number": record_number,
