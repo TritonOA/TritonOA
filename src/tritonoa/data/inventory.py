@@ -1,10 +1,11 @@
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
 import logging
 from pathlib import Path
 import resource
-from typing import Callable, Protocol
+from typing import Protocol
 
 from polars import DataFrame
 import polars as pl

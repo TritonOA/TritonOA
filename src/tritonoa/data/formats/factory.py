@@ -1,5 +1,3 @@
-from typing import Optional
-
 from tritonoa.data.formats.shru import SHRUFileFormat, SHRUReader, SHRURecordFormatter
 from tritonoa.data.formats.sio import SIOFileFormat, SIOReader, SIORecordFormatter
 from tritonoa.data.formats.wav import WAVFileFormat, WAVReader, WAVRecordFormatter
@@ -10,9 +8,20 @@ from tritonoa.data.formats.whoi3dvha import (
 )
 
 
-def get_file_format(
-    suffix: Optional[str] = None, file_format: Optional[str] = None
-) -> str:
+def get_file_format(suffix: str | None = None, file_format: str | None = None) -> str:
+    """Get and validate file format from suffix or format string.
+
+    Args:
+        suffix: File suffix (e.g., '.wav', '.shru').
+        file_format: File format identifier string.
+
+    Returns:
+        Validated file format string.
+
+    Raises:
+        ValueError: If neither suffix nor file_format is provided, or if
+            the format cannot be recognized.
+    """
     if suffix is None and file_format is None:
         raise ValueError("An argument 'suffix' or 'file_format' must be provided.")
     if file_format is not None:
@@ -22,9 +31,20 @@ def get_file_format(
     return file_format
 
 
-def get_formatter(
-    suffix: Optional[str] = None, file_format: Optional[str] = None
-) -> object:
+def get_formatter(suffix: str | None = None, file_format: str | None = None) -> object:
+    """Factory to get record formatter for file format.
+
+    Args:
+        suffix: File suffix (e.g., '.wav', '.shru').
+        file_format: File format identifier string.
+
+    Returns:
+        Record formatter instance for the specified file format.
+
+    Raises:
+        ValueError: If the file format is not recognized or if neither
+            suffix nor file_format is provided.
+    """
     file_format = get_file_format(suffix, file_format)
     if file_format == SHRUFileFormat.FORMAT.value:
         return SHRURecordFormatter()
@@ -37,20 +57,19 @@ def get_formatter(
     raise ValueError(f"File format {file_format} is not recognized.")
 
 
-def get_reader(
-    suffix: Optional[str] = None, file_format: Optional[str] = None
-) -> object:
-    """Factory to get header reader for file format.
+def get_reader(suffix: str | None = None, file_format: str | None = None) -> object:
+    """Factory to get file reader for file format.
 
     Args:
-        suffix (Optional[str], optional): File suffix. Defaults to None.
-        file_format (Optional[str], optional): File format. Defaults to None.
+        suffix: File suffix (e.g., '.wav', '.shru').
+        file_format: File format identifier string.
 
     Returns:
-        tuple[Callable, FileFormat]: Header reader and file format.
+        File reader instance for the specified file format.
 
     Raises:
-        ValueError: If file format is not recognized.
+        ValueError: If the file format is not recognized or if neither
+            suffix nor file_format is provided.
     """
     file_format = get_file_format(suffix, file_format)
     if file_format == SHRUFileFormat.FORMAT.value:
@@ -65,7 +84,18 @@ def get_reader(
 
 
 def validate_file_format(desc: str) -> str:
-    """Get file format from suffix."""
+    """Validate and normalize file format from suffix or format string.
+
+    Args:
+        desc: File suffix or format identifier string to validate.
+
+    Returns:
+        Normalized file format string.
+
+    Raises:
+        ValueError: If the file format cannot be inferred from the
+            provided descriptor.
+    """
     if SHRUFileFormat.is_format(desc):
         return SHRUFileFormat.FORMAT.value
     if SIOFileFormat.is_format(desc):

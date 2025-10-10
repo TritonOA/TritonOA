@@ -4,8 +4,8 @@
 # except ImportError:
 # import scipy.signal as signal
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Callable, Iterable
 import warnings
 
 import numpy as np
@@ -175,8 +175,12 @@ def convert_voltage_to_pressure(
     """
     return voltage / np.array(linear_sensitivity)[:, np.newaxis], "uPa"
 
+
 def convert_counts_to_voltage(
-    data: np.ndarray, linear_fixed_gain: list[float], adc_vref: list[float], adc_maxvalue: int
+    data: np.ndarray,
+    linear_fixed_gain: list[float],
+    adc_vref: list[float],
+    adc_maxvalue: int,
 ) -> tuple[np.ndarray, str]:
     """Convert 24-bit data to voltage.
 

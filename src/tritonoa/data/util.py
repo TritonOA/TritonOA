@@ -1,12 +1,8 @@
-
-
-from typing import Optional, Union
-
 import numpy as np
 
 
 def create_empty_data_chunk(
-    delta: int, dtype: np.dtype, fill_value: Optional[Union[int, float]] = None
+    delta: int, dtype: np.dtype, fill_value: int | float | None = None
 ) -> np.ndarray:
     """
     Creates a NumPy array depending on the given data type and fill value.
@@ -59,7 +55,7 @@ def create_empty_data_chunk(
     return temp
 
 
-def round_away(number: Union[int, float]) -> int:
+def round_away(number: int | float) -> int:
     """Function to round a number away from zero to the nearest integer.
     This is potentially desired behavior in the trim functions.
 

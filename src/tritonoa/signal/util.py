@@ -1,15 +1,15 @@
+from collections.abc import Sequence
 from fractions import Fraction
-from typing import Sequence
 
 import numpy as np
-import numpy.typing as npt
+from numpy.typing import ArrayLike, NDArray
 import scipy.fft as fft
 
 
 def double_to_single_sided_fft(
-    freqs: npt.NDArray[np.float64],
-    fft_values: npt.NDArray[np.complex128],
-) -> tuple[npt.NDArray[np.complex128], npt.NDArray[np.float64]]:
+    freqs: NDArray[np.float64],
+    fft_values: NDArray[np.complex128],
+) -> tuple[NDArray[np.complex128], NDArray[np.float64]]:
     """
     Convert a double-sided FFT to a properly scaled single-sided FFT.
     Efficiently handles both single-channel and multichannel FFT data.
@@ -66,12 +66,12 @@ def double_to_single_sided_fft(
 
 
 def double_to_single_sided_ifft(
-    time_values: npt.NDArray[np.float64],
-    ifft_values: npt.NDArray[np.complex128] | npt.NDArray[np.complexfloating],
+    time_values: NDArray[np.float64],
+    ifft_values: NDArray[np.complex128] | NDArray[np.complexfloating],
     shift: bool = False,
 ) -> tuple[
-    npt.NDArray[np.complex128] | npt.NDArray[np.complexfloating],
-    npt.NDArray[np.float64],
+    NDArray[np.complex128] | NDArray[np.complexfloating],
+    NDArray[np.float64],
 ]:
     """
     Extract the first half of the IFFT result for display or analysis purposes.
@@ -142,7 +142,7 @@ def get_freqs_from_band(
     return f[inds], inds
 
 
-def normalize_pressure(p: float | np.ndarray, log: bool = False) -> np.ndarray:
+def normalize_pressure(p: float | ArrayLike, log: bool = False) -> np.ndarray:
     """Takes complex pressure and returns normalized pressure.
 
     Parameters
