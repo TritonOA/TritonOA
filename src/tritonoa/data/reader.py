@@ -280,7 +280,7 @@ def read_inventory(
 
         # Calculate the index position for this file based on its timestamp
         time_offset = (timestamp - time_init) / np.timedelta64(1, "s")
-        start_index = int(time_offset * sampling_rate)
+        start_index = int(np.round(time_offset * sampling_rate, decimals=6))
 
         logger.debug(f"Time offset: {time_offset} s, start index: {start_index}")
 
