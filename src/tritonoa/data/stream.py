@@ -197,7 +197,6 @@ class DataStream:
 
     def create_hdf5_dataset(self, f: File | Group) -> None:
         f.create_dataset("data", data=self.data)
-        f.create_dataset("time", data=convert_datetime64_to_iso(self.time_vector))
         for key, value in asdict(self.stats).items():
             match value:
                 case np.datetime64():
