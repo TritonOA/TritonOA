@@ -262,7 +262,17 @@ def read_inventory(
     adc_vrefs, gains, sensitivities = _get_conditioning_params(df, len(timestamps))
     sampling_rate = _get_sampling_rate(df)
 
-    expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
+    df_time_end = np.datetime64(df["timestamp"][-1]) + np.timedelta64(
+        int(TIME_CONVERSION_FACTOR * df["npts"][-1] / sampling_rate), TIME_PRECISION
+    )
+    if time_end is not None and df_time_end < time_end:
+        expected_buffer = int(
+            (time_end - np.datetime64(df["timestamp"][0])).astype(int)
+            * sampling_rate
+            / 1e6
+        )
+    else:
+        expected_buffer = _check_buffer(max_buffer, num_channels, sampling_rate, df)
     logger.debug(f"Expected samples: {expected_buffer}")
     waveform = missing_value * np.ones(
         (num_channels, expected_buffer), dtype=np.float64
