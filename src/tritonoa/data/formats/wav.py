@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 from typing import BinaryIO
 import warnings
-from wave import Wave_read
+import struct
 
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike, NDArray
@@ -65,7 +65,7 @@ class WAVReader(BaseReader):
     ) -> DataStream:
         channels = [channels] if isinstance(channels, int) else channels
         raw_data, header = self.read_raw_data(file_path, channels=channels)
-        
+
         data, units = self.condition_data(raw_data, conditioner=conditioner)
 
         return DataStream(
@@ -86,15 +86,73 @@ class WAVReader(BaseReader):
 
     @staticmethod
     def _read_header(fid: BinaryIO) -> WAVHeader:
-        with Wave_read(fid) as wav:
-            return WAVHeader(
-                sample_rate=wav.getframerate(),
-                num_channels=wav.getnchannels(),
-                bytes_per_sample=wav.getsampwidth(),
-                num_samples=wav.getnframes(),
-                compression_type=wav.getcomptype(),
-                compression_name=wav.getcompname(),
-            )
+        """Read WAV file header for both PCM and floating-point formats.
+
+        Manually parses the RIFF/WAVE file structure to extract header information
+        without loading the audio data into memory.
+        """
+        # Read RIFF header
+        riff_header = fid.read(12)
+        if len(riff_header) < 12:
+            raise ValueError("Invalid WAV file: too short")
+
+        riff_id, _, wave_id = struct.unpack("<4sI4s", riff_header)
+        if riff_id != b"RIFF" or wave_id != b"WAVE":
+            raise ValueError("Invalid WAV file: not a RIFF/WAVE file")
+
+        # Find and read fmt chunk
+        fmt_found = False
+        data_found = False
+        num_samples = 0
+
+        while not fmt_found or not data_found:
+            chunk_header = fid.read(8)
+            if len(chunk_header) < 8:
+                break
+
+            chunk_id, chunk_size = struct.unpack("<4sI", chunk_header)
+
+            if chunk_id == b"fmt ":
+                fmt_found = True
+                fmt_data = fid.read(chunk_size)
+
+                # Parse fmt chunk (minimum 16 bytes)
+                format_code, num_channels, sample_rate, _, _, bits_per_sample = (
+                    struct.unpack("<HHIIHH", fmt_data[:16])
+                )
+                bytes_per_sample = bits_per_sample // 8
+
+                # 1 = PCM, 3 = IEEE float
+                if format_code == 1:
+                    compression_type = "NONE"
+                    compression_name = "not compressed"
+                elif format_code == 3:
+                    compression_type = "FLOAT"
+                    compression_name = "IEEE float"
+                else:
+                    compression_type = f"TYPE_{format_code}"
+                    compression_name = f"format code {format_code}"
+
+            elif chunk_id == b"data":
+                data_found = True
+                num_samples = chunk_size // (num_channels * bytes_per_sample)
+                fid.seek(chunk_size, 1)
+            else:
+                fid.seek(chunk_size, 1)
+
+        if not fmt_found:
+            raise ValueError("Invalid WAV file: no fmt chunk found")
+        if not data_found:
+            raise ValueError("Invalid WAV file: no data chunk found")
+
+        return WAVHeader(
+            sample_rate=sample_rate,
+            num_channels=num_channels,
+            bytes_per_sample=bytes_per_sample,
+            num_samples=num_samples,
+            compression_type=compression_type,
+            compression_name=compression_name,
+        )
 
     def read_raw_data(
         self, filename: Path, records: int = 1, channels: list[int] | None = None
@@ -138,7 +196,7 @@ class WAVReader(BaseReader):
             raw_data, linear_fixed_gain, conditioner.adc_vref, ADC_max
         )
         return convert_voltage_to_pressure(voltage, linear_sensitivity)
-    
+
 
 class WAVRecordFormatter(BaseRecordFormatter):
     file_format = "WAV"
