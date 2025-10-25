@@ -180,10 +180,11 @@ class WAVReader(BaseReader):
             conditioner.check_dimensions(raw_data.shape[0])
         except ValueError as e:
             warnings.warn(
-                f"Incorrect number of gain or sensitivity values set: {e}"
+                f"Incorrect number of gain or sensitivity values set: {e} "
+                f"len(adc_vref)={len(conditioner.adc_vref)}, "
                 f"len(gain)={len(conditioner.gain)}, "
                 f"len(sensitivity)={len(conditioner.sensitivity)}, "
-                f"len(channels)={raw_data.shape[0]}."
+                f"len(channels)={raw_data.shape[0]}. "
                 f"Returning the data unconditioned."
             )
             return raw_data, "counts"
