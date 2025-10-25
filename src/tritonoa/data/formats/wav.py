@@ -167,7 +167,7 @@ class WAVReader(BaseReader):
         if data.ndim == 1:
             data = data[np.newaxis, :]
         if channels is not None:
-            data = data[channels, :]
+            data = data[:, channels].T
             header.num_channels = len(channels)
 
         self.bit_depth = header.bit_depth
