@@ -229,13 +229,24 @@ def read_inventory(
     def _get_conditioning_params(
         df: pl.DataFrame,
         num_timestamps: int,
-    ) -> tuple[list[float], list[float]]:
+    ) -> tuple[list[float], list[float], list[float]]:
         adc_vrefs = df.unique(subset=["filename"])["adc_vref"].to_list()[0]
         gains = df.unique(subset=["filename"])["gain"].to_list()[0]
         sensitivities = df.unique(subset=["filename"])["sensitivity"].to_list()[0]
-        if channels is not None:
+
+        if len(gains) == 1:
+            adc_vrefs = adc_vrefs * len(channels)
+            gains = gains * len(channels)
+            sensitivities = sensitivities * len(channels)
+        try:
+            adc_vrefs = [adc_vrefs[i] for i in channels]
             gains = [gains[i] for i in channels]
             sensitivities = [sensitivities[i] for i in channels]
+        except IndexError:
+            raise ValueError(
+                "Channel index out of range for the available conditioning parameters."
+            )
+        
         return (
             [adc_vrefs] * num_timestamps,
             [gains] * num_timestamps,
@@ -251,6 +262,7 @@ def read_inventory(
 
     if channels is None:
         num_channels = _get_nchannels(df)
+        channels = list(range(num_channels))
     else:
         channels = [channels] if isinstance(channels, int) else channels
         num_channels = len(channels)
@@ -397,7 +409,7 @@ def _exceeds_max_time_gap(
 
 
 def _get_nchannels(df: pl.DataFrame) -> int:
-    return len(df.select(pl.first("gain")).item())
+    return df.select(pl.first("nch")).item()
 
 
 def _get_sampling_rate(df: pl.DataFrame) -> float:
