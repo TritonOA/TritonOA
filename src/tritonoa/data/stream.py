@@ -654,7 +654,11 @@ class DataStream:
             total = 1
         self.data = self.data[:, :total]
         self.stats.time_end = self.stats.time_init + np.timedelta64(
-            int(TIME_CONVERSION_FACTOR * self.num_samples / self.stats.sampling_rate),
+            int(
+                TIME_CONVERSION_FACTOR
+                * (self.num_samples - 1)
+                / self.stats.sampling_rate
+            ),
             TIME_PRECISION,
         )
         return self

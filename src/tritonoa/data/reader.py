@@ -246,7 +246,7 @@ def read_inventory(
             raise ValueError(
                 "Channel index out of range for the available conditioning parameters."
             )
-        
+
         return (
             [adc_vrefs] * num_timestamps,
             [gains] * num_timestamps,
@@ -338,7 +338,8 @@ def read_inventory(
 
         # Compute time of last point in this file:
         time_stop = timestamp + np.timedelta64(
-            int(TIME_CONVERSION_FACTOR * data.shape[1] / sampling_rate), TIME_PRECISION
+            int(TIME_CONVERSION_FACTOR * (data.shape[1] - 1) / sampling_rate),
+            TIME_PRECISION,
         )
 
     return DataStream(
