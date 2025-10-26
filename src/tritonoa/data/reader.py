@@ -278,7 +278,7 @@ def read_inventory(
         int(TIME_CONVERSION_FACTOR * df["npts"][-1] / sampling_rate), TIME_PRECISION
     )
     if time_end is not None and df_time_end < time_end:
-        expected_buffer = int(
+        expected_buffer = 1 + int(
             (time_end - np.datetime64(df["timestamp"][0])).astype(int)
             * sampling_rate
             / 1e6
@@ -293,7 +293,10 @@ def read_inventory(
 
     # Initialize time reference from first file
     time_init = timestamps[0]
-    time_stop = None
+    time_stop = time_init + np.timedelta64(
+        int(TIME_CONVERSION_FACTOR * (waveform.shape[1] - 1) / sampling_rate),
+        TIME_PRECISION,
+    )
 
     for filename, timestamp, adc_vref, gain, sensitivity in zip(
         filenames, timestamps, adc_vrefs, gains, sensitivities
@@ -335,12 +338,6 @@ def read_inventory(
 
         waveform[:, start_index:end_index] = data
         logger.debug(f"Stored data at indices {start_index}:{end_index}.")
-
-        # Compute time of last point in this file:
-        time_stop = timestamp + np.timedelta64(
-            int(TIME_CONVERSION_FACTOR * (data.shape[1] - 1) / sampling_rate),
-            TIME_PRECISION,
-        )
 
     return DataStream(
         stats=DataStreamStats(
