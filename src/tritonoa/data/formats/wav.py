@@ -169,13 +169,16 @@ class WAVReader(BaseReader):
         elif channels is not None:
             data = data[:, channels].T
             header.num_channels = len(channels)
-
+        
         self.bit_depth = header.bit_depth
+        self.compression_type = header.compression_type
         return data, header
 
     def condition_data(
         self, raw_data: ArrayLike, conditioner: SignalParams
     ) -> tuple[NDArray[np.float64], None]:
+        if self.compression_type == "FLOAT":
+            return raw_data.astype(np.float64), None
         try:
             conditioner.check_dimensions(raw_data.shape[0])
         except ValueError as e:
