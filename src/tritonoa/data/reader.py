@@ -111,14 +111,14 @@ def read_hdf5(path: Path, start: int = 0, stop: int = -1) -> DataStream:
 def read_hdf5_group(
     group: h5py.Group,
     start: int = 0,
-    stop: int = -1,
+    stop: int | None = None,
 ) -> DataStream:
     """Read data from an HDF5 group and returns a DataStream object.
 
     Args:
-        group (h5py.Group): HDF5 group containing the data.
-        start (int): Start index for slicing the data.
-        stop (int): Stop index for slicing the data.
+        group: HDF5 group containing the data.
+        start: Start index for slicing the data.
+        stop: Stop index for slicing the data.
 
     Returns:
         DataStream: Data stream object with loaded data and statistics.
@@ -140,7 +140,7 @@ def read_hdf5_group(
     data = group["data"][:, start:stop]
     stats = read_hdf5_stats(group)
 
-    if start != 0 or stop != -1:
+    if start != 0 or stop is not None:
         new_time_init, new_time_end = _update_times(
             stats.time_init, stats.time_end, num_samples, start, stop
         )
