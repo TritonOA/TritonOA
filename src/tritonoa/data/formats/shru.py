@@ -478,7 +478,9 @@ class SHRUReader(BaseReader):
 
         linear_fixed_gain = db_to_linear(conditioner.gain)
         linear_sensitivity = db_to_linear(conditioner.sensitivity)
-        data, _ = convert_counts_to_voltage(data, linear_fixed_gain)
+        data, _ = convert_counts_to_voltage(
+            data, linear_fixed_gain, conditioner.adc_vref, ADC_MAXVALUE
+        )
         return convert_voltage_to_pressure(data, linear_sensitivity)
 
     @staticmethod
