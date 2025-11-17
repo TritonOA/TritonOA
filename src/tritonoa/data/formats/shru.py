@@ -578,6 +578,7 @@ class SHRURecordFormatter(BaseRecordFormatter):
             sampling_rate=correct_sampling_rate(fs, clock.drift_rate),
             npts=header.npts,
             nch=header.ch,
+            adc_vref=conditioner.adc_vref,
             gain=conditioner.gain,
             sensitivity=conditioner.sensitivity,
         )

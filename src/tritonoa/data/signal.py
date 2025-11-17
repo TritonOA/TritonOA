@@ -60,6 +60,12 @@ class SignalParams:
             self.gain = [self.gain] * num_channels
         if not isinstance(self.sensitivity, list):
             self.sensitivity = [self.sensitivity] * num_channels
+        if len(self.adc_vref) == 1 and num_channels > 1:
+            self.adc_vref = self.adc_vref * num_channels
+        if len(self.gain) == 1 and num_channels > 1:
+            self.gain = self.gain * num_channels
+        if len(self.sensitivity) == 1 and num_channels > 1:
+            self.sensitivity = self.sensitivity * num_channels
 
 
 def db_to_linear(dbgain: float | list[float]) -> float | list[float]:
