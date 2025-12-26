@@ -13,7 +13,21 @@ authors = [
     { name = "Hunter Akins", email = "fakins@ucsd.edu" },
     { name = "William Jenkins", email = "wfjenkins@ucsd.edu" },
 ]
-dependencies = ["h5py", "matplotlib", "numpy", "polars", "scipy", "tqdm"]
+dependencies = [
+    "Bottleneck",
+    "dask[array]",
+    "h5py",
+    "matplotlib",
+    "netCDF4",
+    "numbagg",
+    "numpy",
+    "packaging",
+    "pandas",
+    "polars",
+    "scipy",
+    "tqdm",
+    "xarray",
+]
 dynamic = ["version"]
 
 [project.urls]
