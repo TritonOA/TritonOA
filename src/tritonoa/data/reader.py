@@ -93,16 +93,16 @@ def read_and_process(
     )
 
 
-def read_hdf5(path: Path, start: int = 0, stop: int = -1) -> DataStream:
+def read_hdf5(path: Path, start: int = 0, stop: int | None = None) -> DataStream:
     """Read data from an HDF5 file and returns a DataStream object.
 
     Args:
-        path (Path): Path to the HDF5 file.
-        start (int): Start index for slicing the data.
-        stop (int): Stop index for slicing the data.
+        path: Path to the HDF5 file.
+        start: Start index for slicing the data.
+        stop: Stop index for slicing the data.
 
     Returns:
-        DataStream: Data stream object with loaded data and statistics.
+        DataStream with loaded data and statistics.
     """
     with h5py.File(path, "r") as f:
         return read_hdf5_group(f, start=start, stop=stop)
@@ -121,7 +121,7 @@ def read_hdf5_group(
         stop: Stop index for slicing the data.
 
     Returns:
-        DataStream: Data stream object with loaded data and statistics.
+        DataStream with loaded data and statistics.
     """
 
     def _update_times(
