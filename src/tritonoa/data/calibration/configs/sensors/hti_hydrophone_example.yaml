@@ -1,0 +1,49 @@
+# Example calibration for HTI hydrophone with filtering
+# This demonstrates combining multiple calibration steps including filters
+
+sensor:
+  manufacturer: "High Tech Inc"
+  model: "HTI-94-SSQ"
+  serial_number: "HTI5678"
+
+calibration:
+  version: "3.2"
+  date: "2025-03-01"
+  valid_until: "2027-03-01"
+
+  chain:
+    # Step 1: ADC conversion
+    - type: "adc_conversion"
+      adc_vref: 5.0
+      adc_bits: 16
+      signed: true
+
+    # Step 2: Remove DC offset if present
+    - type: "offset"
+      offset: -0.001  # Small DC offset in volts
+
+    # Step 3: Preamp gain
+    - type: "gain"
+      gain_db: 26.0
+      invert: false
+
+    # Step 4: High-pass filter to remove low-frequency noise
+    - type: "highpass_filter"
+      cutoff_freq: 5.0    # 5 Hz cutoff
+      order: 4
+      filter_type: "butterworth"
+
+    # Step 5: Hydrophone frequency response correction
+    - type: "frequency_response"
+      frequencies: [1, 10, 100, 1000, 10000, 100000]
+      magnitude_db: [-180.0, -172.0, -168.0, -167.0, -170.0, -178.0]
+      phase_deg: [0, 2, 5, 10, 20, 45]
+      interpolation: "pchip"
+      extrapolation: "constant"
+      apply_inverse: true
+
+    # Step 6: Low-pass filter for anti-aliasing (optional)
+    - type: "lowpass_filter"
+      cutoff_freq: 95000.0  # Below Nyquist
+      order: 8
+      filter_type: "butterworth"

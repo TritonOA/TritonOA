@@ -1,0 +1,47 @@
+# Example calibration configuration for Ocean Sonics icListen HF hydrophone
+# This demonstrates frequency-dependent calibration with magnitude and phase
+
+sensor:
+  manufacturer: "Ocean Sonics"
+  model: "icListen HF"
+  serial_number: "1234"
+
+calibration:
+  version: "2.1"
+  date: "2024-01-15"
+  valid_until: "2026-01-15"
+
+  # Calibration chain: steps applied in order
+  chain:
+    # Step 1: Convert ADC counts to voltage
+    - type: "adc_conversion"
+      adc_vref: 2.5          # ADC reference voltage (V)
+      adc_bits: 24           # ADC bit depth
+      signed: true           # Signed representation
+
+    # Step 2: Apply preamp gain correction
+    - type: "gain"
+      gain_db: 20.0          # Preamp gain in dB
+      invert: false          # Apply inverse (divide by gain)
+
+    # Step 3: Frequency-dependent sensitivity correction
+    # This is the key feature for non-flat hydrophone responses
+    - type: "frequency_response"
+      # Frequency points where sensitivity is known (Hz)
+      frequencies: [10, 100, 1000, 5000, 10000, 50000, 100000]
+
+      # Sensitivity at each frequency point (dB re 1V/µPa)
+      magnitude_db: [-170.0, -168.5, -165.0, -166.5, -168.0, -175.0, -180.0]
+
+      # Phase response at each frequency (degrees)
+      # Optional - set to null if phase correction not needed
+      phase_deg: [0, 1, 3, 8, 15, 30, 50]
+
+      # Interpolation method for frequencies between known points
+      interpolation: "cubic"  # Options: "linear", "cubic", "pchip"
+
+      # How to handle frequencies outside the range
+      extrapolation: "constant"  # Options: "constant", "linear", "raise"
+
+      # Apply inverse response (to correct the data)
+      apply_inverse: true

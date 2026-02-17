@@ -1,0 +1,31 @@
+# Example calibration configuration for SHRU with simple time-domain calibration
+# This demonstrates basic ADC conversion, gain, and sensitivity
+
+sensor:
+  manufacturer: "WHOI"
+  model: "SHRU"
+  serial_number: "SHRU001"
+
+calibration:
+  version: "1.0"
+  date: "2023-06-01"
+  valid_until: null  # No expiration
+
+  chain:
+    # Step 1: Convert 24-bit ADC counts to voltage
+    - type: "adc_conversion"
+      adc_vref: 2.5          # ADC reference voltage (V)
+      adc_bits: 24           # 24-bit ADC
+      signed: true
+
+    # Step 2: Apply fixed gain correction
+    # Per-channel gains (4 channels)
+    - type: "gain"
+      gain_db: [20.0, 20.0, 20.0, 20.0]
+      invert: false
+
+    # Step 3: Convert voltage to pressure using sensitivity
+    # Per-channel sensitivities (dB re 1V/µPa)
+    - type: "sensitivity"
+      sensitivity_db: [-165.0, -165.0, -165.0, -165.0]
+      reference_pressure: 1.0  # µPa
