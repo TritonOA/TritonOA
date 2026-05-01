@@ -1,9 +1,9 @@
+import struct
+import warnings
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import BinaryIO
-import warnings
-import struct
 
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike, NDArray
@@ -16,18 +16,18 @@ from tritonoa.data.formats.base import (
     FileFormatCheckerMixin,
     validate_channels,
 )
-from tritonoa.data.signal import SignalParams
+from tritonoa.data.signal import (
+    SignalParams,
+    convert_counts_to_voltage,
+    convert_voltage_to_pressure,
+    db_to_linear,
+)
 from tritonoa.data.stream import DataStream, DataStreamStats
 from tritonoa.data.time import (
     ClockParameters,
     convert_filename_to_datetime64,
     correct_clock_drift,
     correct_sampling_rate,
-)
-from tritonoa.data.signal import (
-    convert_counts_to_voltage,
-    convert_voltage_to_pressure,
-    db_to_linear,
 )
 
 
@@ -51,7 +51,6 @@ class WAVHeader:
 
 
 class WAVReader(BaseReader):
-
     def read(
         self,
         file_path: Path,
@@ -97,8 +96,11 @@ class WAVReader(BaseReader):
             raise ValueError("Invalid WAV file: too short")
 
         riff_id, _, wave_id = struct.unpack("<4sI4s", riff_header)
-        if riff_id != b"RIFF" or wave_id != b"WAVE":
+        if riff_id not in (b"RIFF", b"RF64") or wave_id != b"WAVE":
             raise ValueError("Invalid WAV file: not a RIFF/WAVE file")
+
+        is_rf64 = riff_id == b"RF64"
+        data_size_64 = None
 
         # Find and read fmt chunk
         fmt_found = False
@@ -112,7 +114,11 @@ class WAVReader(BaseReader):
 
             chunk_id, chunk_size = struct.unpack("<4sI", chunk_header)
 
-            if chunk_id == b"fmt ":
+            if chunk_id == b"ds64" and is_rf64:
+                ds64_data = fid.read(chunk_size)
+                data_size_64 = struct.unpack_from("<Q", ds64_data, 8)[0]
+
+            elif chunk_id == b"fmt ":
                 fmt_found = True
                 fmt_data = fid.read(chunk_size)
 
@@ -135,7 +141,12 @@ class WAVReader(BaseReader):
 
             elif chunk_id == b"data":
                 data_found = True
-                num_samples = chunk_size // (num_channels * bytes_per_sample)
+                effective_size = (
+                    data_size_64
+                    if (is_rf64 and data_size_64 is not None)
+                    else chunk_size
+                )
+                num_samples = effective_size // (num_channels * bytes_per_sample)
                 fid.seek(chunk_size, 1)
             else:
                 fid.seek(chunk_size, 1)
@@ -169,7 +180,7 @@ class WAVReader(BaseReader):
         elif channels is not None:
             data = data[:, channels].T
             header.num_channels = len(channels)
-        
+
         self.bit_depth = header.bit_depth
         self.compression_type = header.compression_type
         return data, header
